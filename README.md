@@ -1,6 +1,6 @@
 # jNet
 
-Android host for a SOCKS5 proxy over current Wi-Fi, Wi-Fi Direct, or Tailscale. Requires Android 13+.
+Android host for a SOCKS5 proxy over current Wi-Fi or Wi-Fi Direct. Requires Android 13+.
 
 ## Connect a computer
 
@@ -12,10 +12,6 @@ Start by loading a page through the configured client. For a UDP test, use a cli
 Start Wi-Fi Direct and use your computer's Wi-Fi settings to join the network shown in jNet.
 
 If both devices already use the same trusted router, tap **Share on current Wi-Fi** instead. Use the address shown in jNet or scan its setup QR. The router can be offline if it allows devices to communicate locally and the phone keeps a working internet connection, such as mobile data. This mode uses Android's normal outbound routing. Devices that can reach the proxy can use it without a separate login.
-
-For Tailscale, connect the phone and client independently using their own Tailscale apps and internet connections. The client needs tailnet access to TCP 1080 on the phone. On the phone, tap **Start tailnet proxy**. jNet looks for the VPN address automatically. If Android does not expose it, copy the IPv4 address from Tailscale and enter it in **Override IPv4 address**. Use **Copy proxy address** to copy the SOCKS5 endpoint. Proxy access is unauthenticated, so only allow clients you want to share with.
-
-If a client uses jNet's Wi-Fi Direct network as its only network connection, the SOCKS5 proxy alone does not provide the client with the network transport that the Tailscale app needs.
 
 Firefox on Windows or Linux: **Settings → General → Network Settings → Settings → Manual proxy configuration**. Enter the displayed IP and port in **SOCKS Host**, choose **SOCKS v5**, and enable **Proxy DNS when using SOCKS v5**. This routes Firefox traffic only. For a quick terminal check on either platform, use:
 
@@ -29,7 +25,18 @@ Use `curl.exe` in Windows PowerShell if `curl` resolves to an alias.
 2. Choose **Add [SOCKS]** in the configuration menu. Enter the address shown in jNet and port **1080**. If proxy authentication is enabled, enter username **jnet** and the SOCKS5 password.
 3. Save the profile and set it active. Choose **Global** proxy routing and turn on **Enable Tun**. Approve the Windows administrator prompt if requested.
 
-SOCKS supports TCP CONNECT in all modes. Current Wi-Fi and Wi-Fi Direct also support UDP ASSOCIATE for clients that enable it. The client must keep its TCP association open and send unfragmented SOCKS datagrams. Tailscale mode supports TCP. Use any compatible SOCKS5 client. Choose a client with TUN or VPN mode if you want it to route eligible apps without configuring each app separately.
+### Join a tailnet from a Windows client
+
+With the PC connected only to the phone's Wi-Fi Direct network, complete the Windows TUN setup above. Leave the phone on its internet connection. It does not need to join the tailnet. Keep the jNet SOCKS endpoint reachable directly over Wi-Fi.
+
+1. Load a new website on the PC and check that jNet's traffic counters increase. This tests the PC's internet path independently of Tailscale.
+2. Open Tailscale on the PC and sign in with an account authorized on the server's tailnet. Leave the exit node unset. Run `tailscale ip -4` to see the PC's own tailnet address.
+3. In PowerShell run `Find-NetRoute -RemoteIPAddress SERVER_IP`, substituting the server's numeric Tailscale IPv4 address. Windows should select the Tailscale interface for the server. Run the same check for the phone's local proxy IP; that destination should use Wi-Fi. If the proxy TUN captures the server address, exclude that address from its TUN routes so Windows can select Tailscale. Tailscale's public connections still need internet through jNet.
+4. Run `tailscale ping SERVER_IP`. A direct or relayed pong confirms peer connectivity. Then connect Minecraft to the server's tailnet IP and configured game port. If the peer responds but the game cannot join, check the tailnet access rules, server listener and host firewall for that port. A LAN-only server needs an accessible subnet route or Tailscale installed on the server.
+
+This workflow requires compatible Windows routes. End-to-end operation with Wi-Fi Direct as the PC's sole internet path has not yet been verified.
+
+SOCKS supports TCP CONNECT in all modes. Current Wi-Fi and Wi-Fi Direct also support UDP ASSOCIATE for clients that enable it. The client must keep its TCP association open and send unfragmented SOCKS datagrams. Use any compatible SOCKS5 client. Choose a client with TUN or VPN mode if you want it to route eligible apps without configuring each app separately.
 
 jNet retries hosting after a network interruption until you tap **Stop sharing**. Clients reconnect using their own retry settings. If the proxy address changes, copy the new address or scan the updated setup QR.
 

@@ -13,8 +13,7 @@ import android.widget.*;
 public final class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView status, details;
-    private EditText address;
-    private View wifi, lan, vpn;
+    private View wifi, lan;
     private Button stop, copyEndpoint;
     private LinearLayout connection;
     private TextView stateLabel;
@@ -100,7 +99,7 @@ public final class MainActivity extends Activity {
                 + "Linux · ProxyChains-NG (run apps through it)\n\n"
                 + "Add a SOCKS5 proxy in the client and enter the address and port shown in jNet. "
                 + "Use remote DNS if your client offers it.\n\n"
-                + "Current Wi-Fi and Wi-Fi Direct support TCP and UDP. Tailscale supports TCP.")
+                + "Current Wi-Fi and Wi-Fi Direct support TCP and UDP. To join a tailnet from Windows, first verify internet access through jNet, then connect Tailscale on the PC. See the Windows guide for route checks.")
             .setPositiveButton("Done", null)
             .show());
         proxyPassword = new EditText(this);
@@ -126,16 +125,6 @@ public final class MainActivity extends Activity {
         lan = modeButton(content, "Current Wi-Fi", "Share on the router you’re already connected to");
         lan.setOnClickListener(view -> start(HostService.LAN));
 
-        address = new EditText(this);
-        address.setSingleLine(true);
-        address.setTextColor(INK);
-        address.setHintTextColor(MUTED);
-        address.setHint("Tailscale IPv4 override (optional)");
-        address.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-        add(settingsPanel, address, 4);
-        vpn = modeButton(content, "Tailscale", "Share with devices on your tailnet");
-        vpn.setOnClickListener(view -> start(HostService.VPN));
-
         section(content, "Settings");
         var hotspot = listRow(content, "Wi-Fi Direct settings", "Network name, password and band", "›");
         hotspot.setOnClickListener(v -> hotspotDialog());
@@ -152,10 +141,9 @@ public final class MainActivity extends Activity {
             proxyPassword.setError("Maximum 255 UTF-8 bytes");
             return;
         }
-        String ip = address.getText().toString().trim();
         int band = getPreferences(MODE_PRIVATE).getInt("wifiBand", 0);
         startForegroundService(new Intent(this, HostService.class).setAction(action)
-            .putExtra("address", ip).putExtra("wifiBand", band)
+            .putExtra("wifiBand", band)
 
             .putExtra("proxyPassword", password).putExtra("mobileOnly", mobileOnly.isChecked()));
 
@@ -308,7 +296,6 @@ public final class MainActivity extends Activity {
             connection.setVisibility(running || !("Idle".equals(state) || "Stopped".equals(state)) ? View.VISIBLE : View.GONE);
             modeState(wifi, "Wi-Fi Direct", running);
             modeState(lan, "Current Wi-Fi", running);
-            modeState(vpn, "Tailscale", running);
             stop.setVisibility(running ? View.VISIBLE : View.GONE);
             handler.postDelayed(this, 300);
         }

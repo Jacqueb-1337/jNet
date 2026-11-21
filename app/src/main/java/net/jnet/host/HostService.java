@@ -12,7 +12,7 @@ import java.net.*;
 import java.util.*;
 
 public final class HostService extends Service {
-    static final String WIFI = "wifi", LAN = "lan", VPN = "vpn", STOP = "stop";
+    static final String WIFI = "wifi", LAN = "lan", STOP = "stop";
     static String status = "Idle";
     static String details = "";
     static String endpoint = "";
@@ -26,7 +26,6 @@ public final class HostService extends Service {
     private WifiP2pManager manager;
     private WifiP2pManager.Channel channel;
     private SocksProxy proxy;
-    private SocksProxy localProxy;
     private String mode;
     private boolean ownsGroup;
     private int attempts;
@@ -43,7 +42,6 @@ public final class HostService extends Service {
     }
 
     static boolean validWifiPassword(String password) { return password.matches("[ -~]{8,63}"); }
-    private String vpnOverride;
     private boolean mobileOnly;
     private Network mobileNetwork;
     private Network boundNetwork;
@@ -62,9 +60,13 @@ public final class HostService extends Service {
             return START_NOT_STICKY;
         }
         if (mode != null) return START_NOT_STICKY;
+        if (!WIFI.equals(action) && !LAN.equals(action)) {
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         mode = action;
         stats = new SessionStats();
-        diagnosticMode = WIFI.equals(mode) ? "Wi-Fi Direct" : LAN.equals(mode) ? "Current Wi-Fi" : "Tailscale";
+        diagnosticMode = WIFI.equals(mode) ? "Wi-Fi Direct" : "Current Wi-Fi";
         diagnosticEndpoint = "";
         stats.note("Sharing started");
         active = true;
@@ -78,7 +80,6 @@ public final class HostService extends Service {
 
         status = "Starting…";
         details = "";
-        vpnOverride = intent.getStringExtra("address");
         wifiBand = bandIndex(intent.getIntExtra("wifiBand", 0));
         String newWifiPassword = intent.getStringExtra("wifiPassword");
         if (WIFI.equals(mode) && newWifiPassword != null && !newWifiPassword.isEmpty()) {
@@ -120,8 +121,7 @@ public final class HostService extends Service {
         if (mode == null) return;
         try {
             if (WIFI.equals(mode)) startWifi();
-            else if (LAN.equals(mode)) shareCurrentWifi();
-            else startVpn(vpnOverride);
+            else shareCurrentWifi();
         } catch (SecurityException e) {
             fail("Permission required to share the connection.");
         } catch (Exception e) {
@@ -302,62 +302,9 @@ public final class HostService extends Service {
         });
     }
 
-    private void startVpn(String address) throws Exception {
-        if (address == null || address.isBlank()) {
-            var networks = getSystemService(android.net.ConnectivityManager.class);
-            var candidates = new HashSet<String>();
-            for (var network : networks.getAllNetworks()) {
-                var caps = networks.getNetworkCapabilities(network);
-                var links = networks.getLinkProperties(network);
-                if (caps == null || links == null ||
-                    !caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) continue;
-                for (var link : links.getLinkAddresses()) {
-                    byte[] bytes = link.getAddress().getAddress();
-                    if (bytes.length == 4 && bytes[0] == 100 &&
-                        Byte.toUnsignedInt(bytes[1]) >= 64 && Byte.toUnsignedInt(bytes[1]) <= 127) {
-                        candidates.add(link.getAddress().getHostAddress());
-                    }
-                }
-            }
-            if (candidates.size() != 1) {
-                retry("Waiting for Tailscale. Use the address override if auto-detection is unavailable.");
-                return;
-            }
-            address = candidates.iterator().next();
-        }
-        if (address == null || !address.matches("100\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}")) {
-            fail("Enter the phone’s Tailscale IPv4 address.");
-            return;
-        }
-        var ip = InetAddress.getByName(address);
-        byte[] bytes = ip.getAddress();
-        int second = Byte.toUnsignedInt(bytes[1]);
-        if (second < 64 || second > 127) {
-            fail("Enter the phone’s Tailscale IPv4 address.");
-            return;
-        }
-        if (NetworkInterface.getByInetAddress(ip) == null) {
-            retry("Waiting for the selected Tailscale address…");
-            return;
-        }
-        localProxy = new SocksProxy(InetAddress.getByName("127.0.0.1"), false, null, proxyPassword, stats);
-        listen(ip, "Tailnet only");
-        if (proxy != null) handler.postDelayed(() -> checkVpn(ip), 2000);
-    }
-
-    private void checkVpn(InetAddress ip) {
-        try {
-            if (NetworkInterface.getByInetAddress(ip) != null) {
-                handler.postDelayed(() -> checkVpn(ip), 2000);
-                return;
-            }
-        } catch (SocketException ignored) {}
-        retry("Tailscale disconnected. Reconnecting…");
-    }
-
     private boolean listen(InetAddress ip, String connectionDetails) {
         try {
-            proxy = new SocksProxy(ip, WIFI.equals(mode) || LAN.equals(mode), boundNetwork, proxyPassword, stats);
+            proxy = new SocksProxy(ip, true, boundNetwork, proxyPassword, stats);
             endpoint = ip.getHostAddress() + ":" + SocksProxy.PORT;
             diagnosticEndpoint = endpoint;
             stats.note("SOCKS5 listener ready");
@@ -372,9 +319,7 @@ public final class HostService extends Service {
 
     private void closeProxies() {
         if (proxy != null) proxy.close();
-        if (localProxy != null) localProxy.close();
         proxy = null;
-        localProxy = null;
         endpoint = "";
         details = "";
         upstreamStatus = "";
