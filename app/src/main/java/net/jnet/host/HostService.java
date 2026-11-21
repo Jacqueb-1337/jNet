@@ -23,6 +23,8 @@ public final class HostService extends Service {
     private String mode;
     private boolean ownsGroup;
     private int attempts;
+    private int wifiBand;
+    static int bandIndex(int band) { return band == 1 || band == 2 ? band : 0; }
     private String vpnOverride;
     private static final long RETRY_MS = 2000;
 
@@ -48,6 +50,7 @@ public final class HostService extends Service {
         status = "Starting…";
         details = "";
         vpnOverride = intent.getStringExtra("address");
+        wifiBand = bandIndex(intent.getIntExtra("wifiBand", 0));
         reconnect();
         return START_NOT_STICKY;
     }
@@ -119,8 +122,14 @@ public final class HostService extends Service {
             password = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
             preferences.edit().putString("password", password).apply();
         }
+        int band = switch (wifiBand) {
+            case 1 -> WifiP2pConfig.GROUP_OWNER_BAND_2GHZ;
+            case 2 -> WifiP2pConfig.GROUP_OWNER_BAND_5GHZ;
+            default -> WifiP2pConfig.GROUP_OWNER_BAND_AUTO;
+        };
         var config = new WifiP2pConfig.Builder()
-            .setNetworkName("DIRECT-JN-jNet").setPassphrase(password).build();
+            .setNetworkName("DIRECT-JN-jNet").setPassphrase(password)
+            .setGroupOperatingBand(band).build();
         var creatingChannel = channel;
         String expectedPassword = password;
         manager.createGroup(creatingChannel, config, new WifiP2pManager.ActionListener() {
@@ -142,7 +151,9 @@ public final class HostService extends Service {
                         attempts = 0;
                         readWifi();
                     } else {
-                        retry("Waiting for Wi-Fi Direct…");
+                        retry(wifiBand == 0 ? "Waiting for Wi-Fi Direct…" :
+                            "Waiting for " + (wifiBand == 1 ? "2.4 GHz" : "5 GHz") +
+                            " Wi-Fi Direct. Stop sharing to try another band.");
                     }
                 });
             }
@@ -163,6 +174,14 @@ public final class HostService extends Service {
                 }
                 return;
             }
+            int frequency = group.getFrequency();
+            boolean on24 = frequency >= 2400 && frequency < 2500;
+            boolean on5 = frequency >= 4900 && frequency < 5925;
+            if (frequency > 0 && ((wifiBand == 1 && !on24) || (wifiBand == 2 && !on5))) {
+                fail("Android started Wi-Fi Direct on a different band. Try Auto or the other band.");
+                return;
+            }
+            String frequencyLine = frequency > 0 ? "\nFrequency   " + frequency + " MHz" : "";
             manager.requestConnectionInfo(readingChannel, connection -> {
                 if (!WIFI.equals(mode) || channel != readingChannel) return;
                 if (connection == null || !connection.groupFormed || connection.groupOwnerAddress == null) {
@@ -172,7 +191,8 @@ public final class HostService extends Service {
                 if (!endpoint.equals(connection.groupOwnerAddress.getHostAddress() + ":" + SocksProxy.PORT)) {
                     closeProxies();
                     if (!listen(connection.groupOwnerAddress,
-                        "Network   " + group.getNetworkName() + "\nPassword   " + group.getPassphrase())) return;
+                        "Network   " + group.getNetworkName() + "\nPassword   " + group.getPassphrase()
+                            + frequencyLine)) return;
                 }
                 attempts = 0;
                 handler.postDelayed(this::readWifi, RETRY_MS);

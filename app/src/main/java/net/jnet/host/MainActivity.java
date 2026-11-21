@@ -16,6 +16,7 @@ public final class MainActivity extends Activity {
     private EditText address;
     private Button wifi, lan, vpn, stop, copyEndpoint;
     private Button setupQr;
+    private Spinner wifiBand;
     private static final int INK = 0xfff1f0df, MUTED = 0xffb5b8ab, ACCENT = 0xffd4ec7d;
 
     @Override public void onCreate(Bundle state) {
@@ -74,6 +75,16 @@ public final class MainActivity extends Activity {
 
         add(content, label("Nearby devices", 20, INK), 32);
         add(content, label("Join this phone’s Wi-Fi network, then enter the SOCKS5 address in your client.", 16, MUTED), 6);
+        wifiBand = new Spinner(this);
+        wifiBand.setContentDescription("Wi-Fi Direct band");
+        var bands = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item,
+            new String[]{"Auto", "2.4 GHz", "5 GHz"});
+        bands.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        wifiBand.setAdapter(bands);
+        wifiBand.setSelection(HostService.bandIndex(getPreferences(MODE_PRIVATE).getInt("wifiBand", 0)));
+        wifiBand.setMinimumHeight(dp(48));
+        add(content, label("Wi-Fi Direct band", 16, MUTED), 8);
+        add(content, wifiBand, 4);
         wifi = button("Start Wi-Fi Direct");
         add(content, wifi, 10);
         wifi.setOnClickListener(view -> {
@@ -107,7 +118,12 @@ public final class MainActivity extends Activity {
 
     private void start(String action) {
         String ip = address.getText().toString().trim();
-        startForegroundService(new Intent(this, HostService.class).setAction(action).putExtra("address", ip));
+        int band = wifiBand.getSelectedItemPosition();
+        if (HostService.WIFI.equals(action)) {
+            getPreferences(MODE_PRIVATE).edit().putInt("wifiBand", band).apply();
+        }
+        startForegroundService(new Intent(this, HostService.class).setAction(action)
+            .putExtra("address", ip).putExtra("wifiBand", band));
     }
 
     @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] grants) {
@@ -125,6 +141,7 @@ public final class MainActivity extends Activity {
             setupQr.setVisibility(hasScannableEndpoint() ? View.VISIBLE : View.GONE);
             boolean running = HostService.active;
             wifi.setEnabled(!running);
+            wifiBand.setEnabled(!running);
             lan.setEnabled(!running);
             vpn.setEnabled(!running);
             stop.setVisibility(running ? View.VISIBLE : View.GONE);
