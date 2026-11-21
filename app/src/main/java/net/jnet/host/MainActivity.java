@@ -14,7 +14,7 @@ public final class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView status, details;
     private EditText address;
-    private Button wifi, vpn, stop, copyEndpoint;
+    private Button wifi, lan, vpn, stop, copyEndpoint;
     private Button setupQr;
     private static final int INK = 0xfff1f0df, MUTED = 0xffb5b8ab, ACCENT = 0xffd4ec7d;
 
@@ -68,7 +68,7 @@ public final class MainActivity extends Activity {
                 + "Windows · Proxifier (paid)\nLinux · ProxyChains-NG (run apps through it)\n\n"
                 + "Add a SOCKS5 proxy in the client and enter the address and port shown in jNet. "
                 + "Use remote DNS if your client offers it.\n\n"
-                + "Wi-Fi Direct supports TCP and UDP. Tailscale supports TCP.")
+                + "Current Wi-Fi and Wi-Fi Direct support TCP and UDP. Tailscale supports TCP.")
             .setPositiveButton("Done", null)
             .show());
 
@@ -80,6 +80,12 @@ public final class MainActivity extends Activity {
             if (checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED) start(HostService.WIFI);
             else requestPermissions(new String[]{Manifest.permission.NEARBY_WIFI_DEVICES}, 10);
         });
+
+        add(content, label("Current Wi-Fi", 20, INK), 26);
+        add(content, label("Join the same trusted router on both devices. The phone needs its own internet connection.", 16, MUTED), 6);
+        lan = button("Share on current Wi-Fi");
+        add(content, lan, 10);
+        lan.setOnClickListener(view -> start(HostService.LAN));
 
         add(content, label("Tailscale", 20, INK), 26);
         add(content, label("Connect Tailscale here and on the client. jNet can find this phone’s VPN address automatically.", 16, MUTED), 6);
@@ -119,6 +125,7 @@ public final class MainActivity extends Activity {
             setupQr.setVisibility(hasScannableEndpoint() ? View.VISIBLE : View.GONE);
             boolean running = HostService.active;
             wifi.setEnabled(!running);
+            lan.setEnabled(!running);
             vpn.setEnabled(!running);
             stop.setVisibility(running ? View.VISIBLE : View.GONE);
             handler.postDelayed(this, 300);

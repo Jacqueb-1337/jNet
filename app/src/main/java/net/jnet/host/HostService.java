@@ -2,13 +2,15 @@ package net.jnet.host;
 
 import android.app.*;
 import android.content.*;
+import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
 import android.net.wifi.p2p.*;
 import android.os.*;
 import java.net.*;
 import java.util.*;
 
 public final class HostService extends Service {
-    static final String WIFI = "wifi", VPN = "vpn", STOP = "stop";
+    static final String WIFI = "wifi", LAN = "lan", VPN = "vpn", STOP = "stop";
     static String status = "Idle";
     static String details = "";
     static String endpoint = "";
@@ -54,12 +56,42 @@ public final class HostService extends Service {
         if (mode == null) return;
         try {
             if (WIFI.equals(mode)) startWifi();
+            else if (LAN.equals(mode)) shareCurrentWifi();
             else startVpn(vpnOverride);
         } catch (SecurityException e) {
             fail("Permission required to share the connection.");
         } catch (Exception e) {
             retry("Could not start the proxy. Retrying…");
         }
+    }
+
+    private void shareCurrentWifi() {
+        var connectivity = getSystemService(ConnectivityManager.class);
+        InetAddress address = null;
+        for (var network : connectivity.getAllNetworks()) {
+            var caps = connectivity.getNetworkCapabilities(network);
+            var links = connectivity.getLinkProperties(network);
+            if (caps == null || links == null ||
+                !caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue;
+            for (var link : links.getLinkAddresses()) {
+                var ip = link.getAddress();
+                if (!(ip instanceof Inet4Address) || ip.isLoopbackAddress() ||
+                    ip.isLinkLocalAddress() || ip.isAnyLocalAddress()) continue;
+                if (address == null || endpoint.equals(ip.getHostAddress() + ":" + SocksProxy.PORT)) {
+                    address = ip;
+                }
+            }
+        }
+        if (address == null) {
+            retry("Waiting for a Wi-Fi network with an IPv4 address…");
+            return;
+        }
+        if (!endpoint.equals(address.getHostAddress() + ":" + SocksProxy.PORT)) {
+            closeProxies();
+            if (!listen(address, "Current Wi-Fi")) return;
+        }
+        handler.postDelayed(this::reconnect, RETRY_MS);
     }
 
     private void retry(String message) {
@@ -203,7 +235,7 @@ public final class HostService extends Service {
 
     private boolean listen(InetAddress ip, String connectionDetails) {
         try {
-            proxy = new SocksProxy(ip, WIFI.equals(mode));
+            proxy = new SocksProxy(ip, WIFI.equals(mode) || LAN.equals(mode));
             endpoint = ip.getHostAddress() + ":" + SocksProxy.PORT;
             details = connectionDetails + "\nSOCKS5   " + endpoint;
             status = "Sharing";

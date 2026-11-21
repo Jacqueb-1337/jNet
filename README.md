@@ -1,10 +1,12 @@
 # jNet
 
-Android host for a SOCKS5 proxy over Wi-Fi Direct or Tailscale. Requires Android 13+.
+Android host for a SOCKS5 proxy over current Wi-Fi, Wi-Fi Direct, or Tailscale. Requires Android 13+.
 
 ## Connect a computer
 
 Start Wi-Fi Direct and use your computer's Wi-Fi settings to join the network shown in jNet.
+
+If both devices already use the same trusted router, tap **Share on current Wi-Fi** instead. Use the address shown in jNet or scan its setup QR. The router can be offline if it allows devices to communicate locally and the phone keeps a working internet connection, such as mobile data. This mode uses Android's normal outbound routing. Devices that can reach the proxy can use it without a separate login.
 
 For Tailscale, connect the phone and client independently using their own Tailscale apps and internet connections. The client needs tailnet access to TCP 1080 on the phone. On the phone, tap **Start tailnet proxy**. jNet looks for the VPN address automatically. If Android does not expose it, copy the IPv4 address from Tailscale and enter it in **Override IPv4 address**. Use **Copy proxy address** to copy the SOCKS5 endpoint. Proxy access is unauthenticated, so only allow clients you want to share with.
 
@@ -16,7 +18,7 @@ Firefox on Windows or Linux: **Settings → General → Network Settings → Set
 
 Use `curl.exe` in Windows PowerShell if `curl` resolves to an alias.
 
-SOCKS supports TCP CONNECT in both modes. Wi-Fi Direct also supports UDP ASSOCIATE for clients that enable it. The client must keep its TCP association open and send unfragmented SOCKS datagrams. Tailscale mode supports TCP. Use any compatible SOCKS5 client. Choose a client with TUN or VPN mode if you want it to route eligible apps without configuring each app separately.
+SOCKS supports TCP CONNECT in all modes. Current Wi-Fi and Wi-Fi Direct also support UDP ASSOCIATE for clients that enable it. The client must keep its TCP association open and send unfragmented SOCKS datagrams. Tailscale mode supports TCP. Use any compatible SOCKS5 client. Choose a client with TUN or VPN mode if you want it to route eligible apps without configuring each app separately.
 
 jNet retries hosting after a network interruption until you tap **Stop sharing**. Clients reconnect using their own retry settings. If the proxy address changes, copy the new address or scan the updated setup QR.
 
