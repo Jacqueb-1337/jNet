@@ -21,6 +21,7 @@ public final class MainActivity extends Activity {
     private CheckBox mobileOnly;
     private TextView activitySummary;
     private TrafficHistory traffic;
+    private LinearLayout settingsPanel;
     private static final int INK = 0xfff1f0df, MUTED = 0xffb5b8ab, ACCENT = 0xffd4ec7d;
 
     @Override public void onCreate(Bundle state) {
@@ -31,8 +32,8 @@ public final class MainActivity extends Activity {
         var content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setBackgroundColor(0xff1b201c);
-        int horizontal = dp(24);
-        content.setPadding(horizontal, dp(32), horizontal, dp(28));
+        int horizontal = dp(20);
+        content.setPadding(horizontal, dp(20), horizontal, dp(24));
         scroll.setFillViewport(true);
         scroll.addView(content);
         scroll.setOnApplyWindowInsetsListener((view, insets) -> {
@@ -42,41 +43,50 @@ public final class MainActivity extends Activity {
         });
         setContentView(scroll);
 
-        var title = label("jNet", 38, INK);
+        var title = label("jNet", 32, INK);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         add(content, title, 0);
-        status = label("", 16, ACCENT);
+        var connection = panel();
+        connection.setBackgroundColor(0xff26362d);
+        add(content, connection, 16);
+        status = label("", 18, ACCENT);
         status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
-        add(content, status, 10);
-        details = label("", 16, INK);
+        add(connection, status, 0);
+        details = label("", 15, INK);
         details.setTypeface(Typeface.MONOSPACE);
         details.setTextIsSelectable(true);
-        details.setLineSpacing(dp(6), 1);
-        add(content, details, 12);
-        copyEndpoint = button("Copy proxy address");
-        add(content, copyEndpoint, 8);
+        details.setLineSpacing(dp(4), 1);
+        add(connection, details, 8);
+        var connectionActions = new LinearLayout(this);
+        add(connection, connectionActions, 8);
+        copyEndpoint = button("Copy address");
+        connectionActions.addView(copyEndpoint, new LinearLayout.LayoutParams(0, -2, 1));
         copyEndpoint.setOnClickListener(view -> {
             if (HostService.endpoint.isEmpty()) return;
             getSystemService(android.content.ClipboardManager.class).setPrimaryClip(
                 android.content.ClipData.newPlainText("jNet proxy address", HostService.endpoint));
         });
-        add(content, label("Traffic", 20, INK), 24);
+        var activityPanel = panel();
+        add(activityPanel, label("Session traffic", 18, INK), 0);
         traffic = new TrafficHistory(this);
         var chart = new LinearLayout.LayoutParams(-1, dp(68));
         chart.topMargin = dp(8);
-        content.addView(traffic, chart);
+        activityPanel.addView(traffic, chart);
         activitySummary = label("", 15, INK);
-        add(content, activitySummary, 8);
+        add(activityPanel, activitySummary, 8);
         var diagnostics = button("Share diagnostics");
-        add(content, diagnostics, 8);
+        add(activityPanel, diagnostics, 8);
         diagnostics.setOnClickListener(view -> shareDiagnostics());
-        setupQr = button("Show setup QR");
+        setupQr = button("Setup QR");
         setupQr.setVisibility(View.GONE);
-        add(content, setupQr, 8);
+        connectionActions.addView(setupQr, new LinearLayout.LayoutParams(0, -2, 1));
         setupQr.setOnClickListener(view -> showSetupQr());
-        add(content, label("Install a SOCKS5 proxy client on the device you want to connect.", 16, MUTED), 12);
+        stop = button("Stop sharing");
+        add(connection, stop, 4);
+        stop.setOnClickListener(view -> stopService(new Intent(this, HostService.class)));
+        settingsPanel = panel();
         var clientHelp = button("Recommended proxy clients");
-        add(content, clientHelp, 8);
+        add(settingsPanel, clientHelp, 12);
         clientHelp.setOnClickListener(view -> new android.app.AlertDialog.Builder(this)
             .setTitle("Connect another device")
             .setMessage("iOS · Potatso\nAndroid · NekoBox for Android (VPN mode)\n"
@@ -93,11 +103,8 @@ public final class MainActivity extends Activity {
         proxyPassword.setHint("Proxy password (optional)");
         proxyPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
             android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        add(content, proxyPassword, 12);
-        add(content, label("If you set a password, use jnet as the SOCKS5 username.", 14, MUTED), 4);
-
-        add(content, label("Nearby devices", 20, INK), 32);
-        add(content, label("Join this phone’s Wi-Fi network, then enter the SOCKS5 address in your client.", 16, MUTED), 6);
+        add(settingsPanel, proxyPassword, 0);
+        add(settingsPanel, label("SOCKS5 username: jnet", 14, MUTED), 4);
         wifiBand = new Spinner(this);
         wifiBand.setContentDescription("Wi-Fi Direct band");
         var bands = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item,
@@ -106,46 +113,42 @@ public final class MainActivity extends Activity {
         wifiBand.setAdapter(bands);
         wifiBand.setSelection(HostService.bandIndex(getPreferences(MODE_PRIVATE).getInt("wifiBand", 0)));
         wifiBand.setMinimumHeight(dp(48));
-        add(content, label("Wi-Fi Direct band", 16, MUTED), 8);
-        add(content, wifiBand, 4);
-        wifi = button("Start Wi-Fi Direct");
-        add(content, wifi, 10);
+        add(settingsPanel, label("Wi-Fi Direct band", 15, MUTED), 12);
+        add(settingsPanel, wifiBand, 0);
+        add(content, label("Share a connection", 18, INK), 20);
+        wifi = modeButton(content, "Wi-Fi Direct", "Create a network for nearby devices");
         wifi.setOnClickListener(view -> {
             if (checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED) start(HostService.WIFI);
             else requestPermissions(new String[]{Manifest.permission.NEARBY_WIFI_DEVICES}, 10);
         });
 
-        add(content, label("Current Wi-Fi", 20, INK), 26);
-        add(content, label("Join the same trusted router on both devices. The phone needs its own internet connection.", 16, MUTED), 6);
         mobileOnly = new CheckBox(this);
         mobileOnly.setText("Use mobile data for proxy traffic");
         mobileOnly.setTextColor(INK);
-        add(content, mobileOnly, 4);
-        lan = button("Share on current Wi-Fi");
-        add(content, lan, 10);
+        add(settingsPanel, mobileOnly, 4);
+        lan = modeButton(content, "Current Wi-Fi", "Share on the router you’re already connected to");
         lan.setOnClickListener(view -> start(HostService.LAN));
 
-        add(content, label("Tailscale", 20, INK), 26);
-        add(content, label("Connect Tailscale here and on the client. jNet can find this phone’s VPN address automatically.", 16, MUTED), 6);
         address = new EditText(this);
         address.setSingleLine(true);
         address.setTextColor(INK);
         address.setHintTextColor(MUTED);
-        address.setHint("Override IPv4 address (optional)");
+        address.setHint("Tailscale IPv4 override (optional)");
         address.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-        add(content, address, 8);
-        vpn = button("Start tailnet proxy");
-        add(content, vpn, 10);
+        add(settingsPanel, address, 4);
+        vpn = modeButton(content, "Tailscale", "Share with devices on your tailnet");
         vpn.setOnClickListener(view -> start(HostService.VPN));
 
-        stop = button("Stop sharing");
-        add(content, stop, 20);
-        stop.setOnClickListener(view -> stopService(new Intent(this, HostService.class)));
+        expandable(content, "Connection settings", settingsPanel);
+        expandable(content, "Activity & diagnostics", activityPanel);
+        refresh.run();
+        handler.removeCallbacks(refresh);
     }
 
     private void start(String action) {
         String password = proxyPassword.getText().toString();
         if (password.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 255) {
+            settingsPanel.setVisibility(View.VISIBLE);
             proxyPassword.setError("Maximum 255 UTF-8 bytes");
             return;
         }
@@ -159,6 +162,39 @@ public final class MainActivity extends Activity {
             .putExtra("proxyPassword", password).putExtra("mobileOnly", mobileOnly.isChecked()));
     }
 
+    private LinearLayout panel() {
+        var panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setBackgroundColor(0xff242b25);
+        panel.setPadding(dp(12), dp(12), dp(12), dp(12));
+        return panel;
+    }
+
+    private Button modeButton(LinearLayout parent, String title, String description) {
+        var row = panel();
+        var action = button(title);
+        action.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        action.setContentDescription("Start " + title);
+        add(row, action, 0);
+        add(row, label(description, 14, MUTED), 4);
+        add(parent, row, 8);
+        return action;
+    }
+
+    private void expandable(LinearLayout parent, String title, LinearLayout panel) {
+        panel.setVisibility(View.GONE);
+        var control = button(title);
+        control.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        add(parent, control, 12);
+        add(parent, panel, 0);
+        control.setOnClickListener(view -> {
+            boolean expanded = panel.getVisibility() != View.VISIBLE;
+            panel.setVisibility(expanded ? View.VISIBLE : View.GONE);
+            control.setStateDescription(expanded ? "Expanded" : "Collapsed");
+        });
+        control.setStateDescription("Collapsed");
+    }
+
     @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] grants) {
         super.onRequestPermissionsResult(request, permissions, grants);
         if (request == 10 && grants.length > 0 && grants[0] == PackageManager.PERMISSION_GRANTED) start(HostService.WIFI);
@@ -167,7 +203,8 @@ public final class MainActivity extends Activity {
 
     private final Runnable refresh = new Runnable() {
         @Override public void run() {
-            if (!HostService.status.contentEquals(status.getText())) status.setText(HostService.status);
+            String state = HostService.active ? HostService.diagnosticMode + " · " + HostService.status : HostService.status;
+            if (!state.contentEquals(status.getText())) status.setText(state);
             String summary = HostService.details;
             if (!HostService.upstreamStatus.isEmpty()) summary += "\n" + HostService.upstreamStatus;
             if (!HostService.endpoint.isEmpty() && !HostService.proxyPassword.isEmpty()) {
