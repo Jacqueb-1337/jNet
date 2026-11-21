@@ -23,6 +23,22 @@ Firefox on Windows or Linux: **Settings → General → Network Settings → Set
 
 Use `curl.exe` in Windows PowerShell if `curl` resolves to an alias.
 
+### Windows TUN setup
+
+Install [Clash Verge Rev](https://github.com/clash-verge-rev/clash-verge-rev/releases). Save the following as `jnet.yaml`, replace the proxy address and port, then import it as a local profile. Select the profile and enable TUN mode. Set `udp: false` for Tailscale sharing. If jNet requires a proxy login, add `username: jnet` and `password: "your-password"` under the proxy entry.
+
+```yaml
+mode: rule
+proxies:
+  - name: jNet
+    type: socks5
+    server: 192.168.49.1
+    port: 1080
+    udp: true
+rules:
+  - MATCH,jNet
+```
+
 SOCKS supports TCP CONNECT in all modes. Current Wi-Fi and Wi-Fi Direct also support UDP ASSOCIATE for clients that enable it. The client must keep its TCP association open and send unfragmented SOCKS datagrams. Tailscale mode supports TCP. Use any compatible SOCKS5 client. Choose a client with TUN or VPN mode if you want it to route eligible apps without configuring each app separately.
 
 jNet retries hosting after a network interruption until you tap **Stop sharing**. Clients reconnect using their own retry settings. If the proxy address changes, copy the new address or scan the updated setup QR.

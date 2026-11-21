@@ -91,7 +91,8 @@ public final class MainActivity extends Activity {
         clientHelp.setOnClickListener(view -> new android.app.AlertDialog.Builder(this)
             .setTitle("Connect another device")
             .setMessage("iOS · Potatso\nAndroid · NekoBox for Android (VPN mode)\n"
-                + "Windows · Proxifier (paid)\nLinux · ProxyChains-NG (run apps through it)\n\n"
+                + "Windows · Clash Verge Rev (free; import the jNet YAML profile from the README and enable TUN)\n"
+                + "Linux · ProxyChains-NG (run apps through it)\n\n"
                 + "Add a SOCKS5 proxy in the client and enter the address and port shown in jNet. "
                 + "Use remote DNS if your client offers it.\n\n"
                 + "Current Wi-Fi and Wi-Fi Direct support TCP and UDP. Tailscale supports TCP.")
