@@ -15,6 +15,7 @@ public final class MainActivity extends Activity {
     private TextView status, details;
     private EditText address;
     private Button wifi, vpn, usb, stop, copyEndpoint;
+    private Button setupQr;
     private static final int INK = 0xfff1f0df, MUTED = 0xffb5b8ab, ACCENT = 0xffd4ec7d;
 
     @Override public void onCreate(Bundle state) {
@@ -54,6 +55,10 @@ public final class MainActivity extends Activity {
             getSystemService(android.content.ClipboardManager.class).setPrimaryClip(
                 android.content.ClipData.newPlainText("jNet proxy address", HostService.endpoint));
         });
+        setupQr = button("Show setup QR");
+        setupQr.setVisibility(View.GONE);
+        add(content, setupQr, 8);
+        setupQr.setOnClickListener(view -> showSetupQr());
         add(content, label("Install a SOCKS5 proxy client on the device you want to connect.", 16, MUTED), 12);
         var clientHelp = button("Recommended proxy clients");
         add(content, clientHelp, 8);
@@ -117,6 +122,7 @@ public final class MainActivity extends Activity {
             if (!HostService.details.contentEquals(details.getText())) details.setText(HostService.details);
             details.setVisibility(HostService.details.isEmpty() ? View.GONE : View.VISIBLE);
             copyEndpoint.setVisibility(HostService.endpoint.isEmpty() ? View.GONE : View.VISIBLE);
+            setupQr.setVisibility(hasScannableEndpoint() ? View.VISIBLE : View.GONE);
             boolean running = HostService.status.equals("Sharing") || HostService.status.equals("Starting…");
             wifi.setEnabled(!running);
             vpn.setEnabled(!running);
@@ -125,6 +131,45 @@ public final class MainActivity extends Activity {
             handler.postDelayed(this, 300);
         }
     };
+
+    private boolean hasScannableEndpoint() {
+        return !HostService.endpoint.isEmpty() && !HostService.endpoint.startsWith("127.0.0.1:");
+    }
+
+    private void showSetupQr() {
+        if (!hasScannableEndpoint()) return;
+        String uri = "socks5://" + HostService.endpoint + "#jNet";
+        try {
+            var matrix = new com.google.zxing.qrcode.QRCodeWriter()
+                .encode(uri, com.google.zxing.BarcodeFormat.QR_CODE, 768, 768);
+            int width = matrix.getWidth();
+            int height = matrix.getHeight();
+            int[] pixels = new int[width * height];
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    pixels[y * width + x] = matrix.get(x, y) ? Color.BLACK : Color.WHITE;
+                }
+            }
+            var qr = new ImageView(this);
+            qr.setImageBitmap(android.graphics.Bitmap.createBitmap(
+                pixels, width, height, android.graphics.Bitmap.Config.ARGB_8888));
+            qr.setAdjustViewBounds(true);
+            qr.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            qr.setContentDescription("SOCKS5 setup code for " + HostService.endpoint);
+            var panel = new LinearLayout(this);
+            panel.setOrientation(LinearLayout.VERTICAL);
+            panel.setPadding(dp(20), dp(8), dp(20), 0);
+            add(panel, label("On the other device, open Potatso or NekoBox and use its QR scanner.", 16, INK), 0);
+            add(panel, qr, 12);
+            new android.app.AlertDialog.Builder(this)
+                .setTitle("Scan to add jNet")
+                .setView(panel)
+                .setPositiveButton("Done", null)
+                .show();
+        } catch (com.google.zxing.WriterException exception) {
+            Toast.makeText(this, "Could not create the setup QR.", Toast.LENGTH_SHORT).show();
+        }
+    }
     @Override protected void onStart() { super.onStart(); handler.post(refresh); }
     @Override protected void onStop() { handler.removeCallbacks(refresh); super.onStop(); }
 
