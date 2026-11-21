@@ -54,6 +54,18 @@ public final class MainActivity extends Activity {
             getSystemService(android.content.ClipboardManager.class).setPrimaryClip(
                 android.content.ClipData.newPlainText("jNet proxy address", HostService.endpoint));
         });
+        add(content, label("Install a SOCKS5 proxy client on the device you want to connect.", 16, MUTED), 12);
+        var clientHelp = button("Recommended proxy clients");
+        add(content, clientHelp, 8);
+        clientHelp.setOnClickListener(view -> new android.app.AlertDialog.Builder(this)
+            .setTitle("Connect another device")
+            .setMessage("iOS · Potatso\nAndroid · NekoBox for Android (VPN mode)\n"
+                + "Windows · Proxifier (paid)\nLinux · ProxyChains-NG (run apps through it)\n\n"
+                + "Add a SOCKS5 proxy in the client and enter the address and port shown in jNet. "
+                + "Use remote DNS if your client offers it.\n\n"
+                + "jNet forwards TCP. Apps that require UDP, including some games and calls, may not work.")
+            .setPositiveButton("Done", null)
+            .show());
 
         add(content, label("Nearby devices", 20, INK), 32);
         add(content, label("Join this phone’s Wi-Fi network, then enter the SOCKS5 address in your client.", 16, MUTED), 6);
