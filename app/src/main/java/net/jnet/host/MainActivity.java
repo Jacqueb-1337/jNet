@@ -13,6 +13,7 @@ import android.widget.*;
 public final class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView status, details;
+    private String pendingShare;
     private View wifi, lan;
     private Button stop, copyEndpoint;
     private LinearLayout connection;
@@ -154,8 +155,67 @@ public final class MainActivity extends Activity {
         hotspot.setOnClickListener(v -> hotspotDialog());
         expandable(content, "Connection settings", settingsPanel);
         expandable(content, "Activity & diagnostics", activityPanel);
+        if (state == null) checkForUpdate();
         refresh.run();
         handler.removeCallbacks(refresh);
+    }
+
+    private void checkForUpdate() {
+        new Thread(() -> {
+            try {
+                String installed = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+                var url = new java.net.URL("https://api.github.com/repos/Jacqueb-1337/jNet/releases?per_page=20");
+                var connection = (java.net.HttpURLConnection) url.openConnection();
+                connection.setConnectTimeout(6000);
+                connection.setReadTimeout(6000);
+                try {
+                    try (var input = connection.getInputStream()) {
+                        var releases = new org.json.JSONArray(new String(input.readAllBytes(),
+                            java.nio.charset.StandardCharsets.UTF_8));
+                        String newest = installed;
+                        for (int i = 0; i < releases.length(); i++) {
+                            var release = releases.getJSONObject(i);
+                            String tag = release.optString("tag_name");
+                            if (release.optBoolean("draft") || !tag.matches("v[0-9]{1,6}\\.[0-9]{1,6}\\.[0-9]{1,6}")) continue;
+                            boolean hasApk = false;
+                            var assets = release.getJSONArray("assets");
+                            for (int j = 0; j < assets.length(); j++) {
+                                if (assets.getJSONObject(j).optString("name").equals("jNet-" + tag.substring(1) + ".apk")) hasApk = true;
+                            }
+                            if (hasApk && compareVersions(tag.substring(1), newest) > 0) newest = tag.substring(1);
+                        }
+                        if (newest.equals(installed)) return;
+                        String version = newest;
+                        runOnUiThread(() -> {
+                            if (isFinishing() || isDestroyed()) return;
+                            new android.app.AlertDialog.Builder(this)
+                                .setTitle("jNet " + version + " is available")
+                                .setNegativeButton("Later", null)
+                                .setPositiveButton("Open release", (dialog, which) -> {
+                                    var release = android.net.Uri.parse("https://github.com/Jacqueb-1337/jNet/releases/tag/v" + version);
+                                    try { startActivity(new Intent(Intent.ACTION_VIEW, release)); }
+                                    catch (android.content.ActivityNotFoundException e) {
+                                        Toast.makeText(this, "Install a browser to open the release.", Toast.LENGTH_SHORT).show();
+                                    }
+                                }).show();
+                        });
+                    }
+                } finally {
+                    connection.disconnect();
+                }
+            } catch (Exception e) {
+                android.util.Log.d("jNet", "Update check unavailable", e);
+            }
+        }, "jNet update check").start();
+    }
+
+    private static int compareVersions(String first, String second) {
+        String[] a = first.split("\\."), b = second.split("\\.");
+        for (int i = 0; i < 3; i++) {
+            int order = Integer.compare(Integer.parseInt(a[i]), Integer.parseInt(b[i]));
+            if (order != 0) return order;
+        }
+        return 0;
     }
 
     private void start(String action) {
@@ -166,6 +226,13 @@ public final class MainActivity extends Activity {
             return;
         }
         int band = getPreferences(MODE_PRIVATE).getInt("wifiBand", 0);
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+                !getPreferences(MODE_PRIVATE).getBoolean("askedForNotifications", false)) {
+            pendingShare = action;
+            getPreferences(MODE_PRIVATE).edit().putBoolean("askedForNotifications", true).apply();
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 11);
+            return;
+        }
         startForegroundService(new Intent(this, HostService.class).setAction(action)
             .putExtra("wifiBand", band)
 
@@ -291,6 +358,12 @@ public final class MainActivity extends Activity {
 
     @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] grants) {
         super.onRequestPermissionsResult(request, permissions, grants);
+        if (request == 11 && pendingShare != null) {
+            String action = pendingShare;
+            pendingShare = null;
+            start(action);
+            return;
+        }
         if (request == 10 && grants.length > 0 && grants[0] == PackageManager.PERMISSION_GRANTED) start(HostService.WIFI);
         else if (request == 10) HostService.status = "Allow Nearby devices to start Wi-Fi Direct.";
     }

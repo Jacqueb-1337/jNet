@@ -78,7 +78,8 @@ public final class HostService extends Service {
         var open = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
         startForeground(1, new Notification.Builder(this, "host")
             .setContentTitle("jNet is sharing").setSmallIcon(android.R.drawable.stat_sys_upload)
-            .setContentIntent(open).addAction(new Notification.Action.Builder(null, "Stop", stop).build()).build());
+            .setOngoing(true).setOnlyAlertOnce(true).setContentText(diagnosticMode + " · SOCKS5 and setup page")
+            .setContentIntent(open).addAction(new Notification.Action.Builder(null, "Stop sharing", stop).build()).build());
 
         status = "Starting…";
         details = "";

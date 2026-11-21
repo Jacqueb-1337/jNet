@@ -6,8 +6,8 @@ android {
         applicationId 'net.jnet.host'
         minSdk 33
         targetSdk 35
-        versionCode 24
-        versionName '0.1.23'
+        versionCode 25
+        versionName '0.1.24'
     }
 }
 android.compileOptions {
