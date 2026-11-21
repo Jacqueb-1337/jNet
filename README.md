@@ -2,6 +2,10 @@
 
 Android host for a SOCKS5 proxy over current Wi-Fi or Wi-Fi Direct. Requires Android 13+.
 
+## Set up an offline device
+
+Start sharing, join the shared Wi-Fi, then scan **Setup page QR** with the other device's camera or type the displayed setup URL into its browser. Use the complete URL including the port. The phone streams official Windows, Android and Linux client downloads over its internet connection. The local page also shows the SOCKS5 settings. An automatic sign-in popup depends on the client and network. Use **Proxy QR** to import settings into an installed client.
+
 ## Connect a computer
 
 For an offline router, connect both devices to its regular Wi-Fi network. On the phone, enable mobile data, select **Use mobile data for proxy traffic**, and tap **Share on current Wi-Fi**. If you set a proxy password, enter `jnet` as the SOCKS5 username. In Potatso or NekoBox, scan **Show setup QR** to import the proxy. On a computer, enter the displayed address and port in your SOCKS5 client.

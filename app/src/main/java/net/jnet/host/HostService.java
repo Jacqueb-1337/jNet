@@ -44,6 +44,8 @@ public final class HostService extends Service {
     static boolean validWifiPassword(String password) { return password.matches("[ -~]{8,63}"); }
     private boolean mobileOnly;
     private Network mobileNetwork;
+    static String portalUrl = "";
+    private SetupPortal portal;
     private Network boundNetwork;
     private Network checkedNetwork;
     private ConnectivityManager.NetworkCallback mobileCallback;
@@ -309,6 +311,16 @@ public final class HostService extends Service {
             diagnosticEndpoint = endpoint;
             stats.note("SOCKS5 listener ready");
             details = connectionDetails + "\nSOCKS5   " + endpoint;
+            try {
+                portal = new SetupPortal(ip.getHostAddress(), boundNetwork, !proxyPassword.isEmpty());
+                portal.start();
+                portalUrl = portal.url();
+                details += "\nSetup page   " + portalUrl;
+            } catch (java.io.IOException e) {
+                if (portal != null) portal.stop();
+                portal = null;
+                details += "\nSetup page unavailable";
+            }
             status = "Sharing";
             return true;
         } catch (Exception e) {
@@ -318,6 +330,9 @@ public final class HostService extends Service {
     }
 
     private void closeProxies() {
+        portalUrl = "";
+        if (portal != null) portal.stop();
+        portal = null;
         if (proxy != null) proxy.close();
         proxy = null;
         endpoint = "";

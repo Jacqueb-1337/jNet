@@ -17,7 +17,7 @@ public final class MainActivity extends Activity {
     private Button stop, copyEndpoint;
     private LinearLayout connection;
     private TextView stateLabel;
-    private Button setupQr;
+    private Button setupQr, portalQr;
     private EditText proxyPassword;
     private CheckBox mobileOnly;
     private TextView activitySummary;
@@ -100,10 +100,16 @@ public final class MainActivity extends Activity {
         var diagnostics = button("Share diagnostics");
         add(activityPanel, diagnostics, 8);
         diagnostics.setOnClickListener(view -> shareDiagnostics());
-        setupQr = button("Setup QR");
+        setupQr = button("Proxy QR");
         setupQr.setVisibility(View.GONE);
         connectionActions.addView(setupQr, new LinearLayout.LayoutParams(0, -2, 1));
         setupQr.setOnClickListener(view -> showSetupQr());
+        portalQr = button("Setup page QR");
+        add(connection, portalQr, 0);
+        portalQr.setOnClickListener(v -> {
+            String url = HostService.portalUrl;
+            if (!url.isEmpty()) showQr(url, "Open setup page", "Join the shared Wi-Fi, then scan with the camera or open " + url, false);
+        });
         stop = button("Stop sharing");
         add(connection, stop, 4);
         stop.setOnClickListener(view -> stopService(new Intent(this, HostService.class)));
@@ -305,6 +311,7 @@ public final class MainActivity extends Activity {
             if (!activity.contentEquals(activitySummary.getText())) activitySummary.setText(activity);
             details.setVisibility(HostService.details.isEmpty() ? View.GONE : View.VISIBLE);
             copyEndpoint.setVisibility(HostService.endpoint.isEmpty() ? View.GONE : View.VISIBLE);
+            portalQr.setVisibility(HostService.portalUrl.isEmpty() ? View.GONE : View.VISIBLE);
             setupQr.setVisibility(hasScannableEndpoint() ? View.VISIBLE : View.GONE);
             boolean running = HostService.active;
             proxyPassword.setEnabled(!running);
@@ -436,6 +443,10 @@ public final class MainActivity extends Activity {
         String password = HostService.proxyPassword;
         String credentials = password.isEmpty() ? "" : "jnet:" + android.net.Uri.encode(password) + "@";
         String uri = "socks5://" + credentials + HostService.endpoint + "#jNet";
+        showQr(uri, "Scan to add jNet", "On the other device, open Potatso or NekoBox and use its QR scanner.", !password.isEmpty());
+    }
+
+    private void showQr(String uri, String title, String instructions, boolean includesPassword) {
         try {
             var matrix = new com.google.zxing.qrcode.QRCodeWriter()
                 .encode(uri, com.google.zxing.BarcodeFormat.QR_CODE, 768, 768);
@@ -452,17 +463,17 @@ public final class MainActivity extends Activity {
                 pixels, width, height, android.graphics.Bitmap.Config.ARGB_8888));
             qr.setAdjustViewBounds(true);
             qr.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            qr.setContentDescription("SOCKS5 setup code for " + HostService.endpoint);
+            qr.setContentDescription(title);
             var panel = new LinearLayout(this);
             panel.setOrientation(LinearLayout.VERTICAL);
             panel.setPadding(dp(20), dp(8), dp(20), 0);
-            add(panel, label("On the other device, open Potatso or NekoBox and use its QR scanner.", 16, INK), 0);
-            if (!password.isEmpty()) {
+            add(panel, label(instructions, 16, INK), 0);
+            if (includesPassword) {
                 add(panel, label("This QR includes your proxy password.", 14, MUTED), 6);
             }
             add(panel, qr, 12);
             new android.app.AlertDialog.Builder(this)
-                .setTitle("Scan to add jNet")
+                .setTitle(title)
                 .setView(panel)
                 .setPositiveButton("Done", null)
                 .show();
