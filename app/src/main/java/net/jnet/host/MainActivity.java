@@ -18,6 +18,7 @@ public final class MainActivity extends Activity {
     private Button setupQr;
     private Spinner wifiBand;
     private EditText proxyPassword;
+    private EditText wifiPassword;
     private CheckBox mobileOnly;
     private TextView activitySummary;
     private TrafficHistory traffic;
@@ -115,6 +116,15 @@ public final class MainActivity extends Activity {
         wifiBand.setMinimumHeight(dp(48));
         add(settingsPanel, label("Wi-Fi Direct band", 15, MUTED), 12);
         add(settingsPanel, wifiBand, 0);
+        wifiPassword = new EditText(this);
+        wifiPassword.setSingleLine(true);
+        wifiPassword.setTextColor(INK);
+        wifiPassword.setHintTextColor(MUTED);
+        wifiPassword.setHint("New Wi-Fi Direct password");
+        wifiPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
+            android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        add(settingsPanel, wifiPassword, 4);
+        add(settingsPanel, label("8–63 letters, numbers, spaces or symbols. Leave blank to keep the saved password.", 14, MUTED), 4);
         add(content, label("Share a connection", 18, INK), 20);
         wifi = modeButton(content, "Wi-Fi Direct", "Create a network for nearby devices");
         wifi.setOnClickListener(view -> {
@@ -154,12 +164,21 @@ public final class MainActivity extends Activity {
         }
         String ip = address.getText().toString().trim();
         int band = wifiBand.getSelectedItemPosition();
+        String newWifiPassword = HostService.WIFI.equals(action) ? wifiPassword.getText().toString() : "";
+        if (!newWifiPassword.isEmpty() && !HostService.validWifiPassword(newWifiPassword)) {
+            settingsPanel.setVisibility(View.VISIBLE);
+            wifiPassword.setError("Use 8–63 printable ASCII characters");
+            wifiPassword.requestFocus();
+            return;
+        }
         if (HostService.WIFI.equals(action)) {
             getPreferences(MODE_PRIVATE).edit().putInt("wifiBand", band).apply();
         }
         startForegroundService(new Intent(this, HostService.class).setAction(action)
             .putExtra("address", ip).putExtra("wifiBand", band)
+            .putExtra("wifiPassword", newWifiPassword)
             .putExtra("proxyPassword", password).putExtra("mobileOnly", mobileOnly.isChecked()));
+        if (HostService.WIFI.equals(action)) wifiPassword.setText("");
     }
 
     private LinearLayout panel() {
@@ -220,6 +239,7 @@ public final class MainActivity extends Activity {
             setupQr.setVisibility(hasScannableEndpoint() ? View.VISIBLE : View.GONE);
             boolean running = HostService.active;
             proxyPassword.setEnabled(!running);
+            wifiPassword.setEnabled(!running);
             mobileOnly.setEnabled(!running);
             wifi.setEnabled(!running);
             wifiBand.setEnabled(!running);

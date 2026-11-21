@@ -32,6 +32,7 @@ public final class HostService extends Service {
     private int attempts;
     private int wifiBand;
     static int bandIndex(int band) { return band == 1 || band == 2 ? band : 0; }
+    static boolean validWifiPassword(String password) { return password.matches("[ -~]{8,63}"); }
     private String vpnOverride;
     private boolean mobileOnly;
     private Network mobileNetwork;
@@ -69,6 +70,14 @@ public final class HostService extends Service {
         details = "";
         vpnOverride = intent.getStringExtra("address");
         wifiBand = bandIndex(intent.getIntExtra("wifiBand", 0));
+        String newWifiPassword = intent.getStringExtra("wifiPassword");
+        if (WIFI.equals(mode) && newWifiPassword != null && !newWifiPassword.isEmpty()) {
+            if (!validWifiPassword(newWifiPassword)) {
+                fail("Wi-Fi Direct password must use 8–63 printable ASCII characters.");
+                return START_NOT_STICKY;
+            }
+            getSharedPreferences("host", MODE_PRIVATE).edit().putString("password", newWifiPassword).apply();
+        }
         proxyPassword = Objects.toString(intent.getStringExtra("proxyPassword"), "");
         mobileOnly = LAN.equals(mode) && intent.getBooleanExtra("mobileOnly", false);
         if (mobileOnly) {
