@@ -14,27 +14,27 @@ public final class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView status, details;
     private EditText address;
-    private Button wifi, lan, vpn, stop, copyEndpoint;
+    private View wifi, lan, vpn;
+    private Button stop, copyEndpoint;
+    private LinearLayout connection;
+    private TextView stateLabel;
     private Button setupQr;
-    private Spinner wifiBand;
     private EditText proxyPassword;
-    private EditText wifiPassword;
     private CheckBox mobileOnly;
     private TextView activitySummary;
     private TrafficHistory traffic;
     private LinearLayout settingsPanel;
-    private static final int INK = 0xfff1f0df, MUTED = 0xffb5b8ab, ACCENT = 0xffd4ec7d;
+    private static final int INK = 0xfff1f4f5, MUTED = 0xffa8b3b7, ACCENT = 0xff79dcc6;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().setStatusBarColor(0xff1b201c);
-        getWindow().setNavigationBarColor(0xff1b201c);
+        getWindow().setStatusBarColor(0xff101315);
+        getWindow().setNavigationBarColor(0xff101315);
         var scroll = new ScrollView(this);
         var content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setBackgroundColor(0xff1b201c);
-        int horizontal = dp(20);
-        content.setPadding(horizontal, dp(20), horizontal, dp(24));
+        content.setBackgroundColor(0xff101315);
+        content.setPadding(0, 0, 0, dp(24));
         scroll.setFillViewport(true);
         scroll.addView(content);
         scroll.setOnApplyWindowInsetsListener((view, insets) -> {
@@ -44,12 +44,17 @@ public final class MainActivity extends Activity {
         });
         setContentView(scroll);
 
-        var title = label("jNet", 32, INK);
+        var header = new LinearLayout(this);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(16), dp(10), dp(16), dp(10));
+        var title = label("jNet", 26, INK);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        add(content, title, 0);
-        var connection = panel();
-        connection.setBackgroundColor(0xff26362d);
-        add(content, connection, 16);
+        header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
+        stateLabel = label("", 14, MUTED);
+        header.addView(stateLabel);
+        add(content, header, 0);
+        connection = panel();
+        add(content, connection, 0);
         status = label("", 18, ACCENT);
         status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         add(connection, status, 0);
@@ -107,26 +112,7 @@ public final class MainActivity extends Activity {
             android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
         add(settingsPanel, proxyPassword, 0);
         add(settingsPanel, label("SOCKS5 username: jnet", 14, MUTED), 4);
-        wifiBand = new Spinner(this);
-        wifiBand.setContentDescription("Wi-Fi Direct band");
-        var bands = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item,
-            new String[]{"Auto", "2.4 GHz", "5 GHz"});
-        bands.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        wifiBand.setAdapter(bands);
-        wifiBand.setSelection(HostService.bandIndex(getPreferences(MODE_PRIVATE).getInt("wifiBand", 0)));
-        wifiBand.setMinimumHeight(dp(48));
-        add(settingsPanel, label("Wi-Fi Direct band", 15, MUTED), 12);
-        add(settingsPanel, wifiBand, 0);
-        wifiPassword = new EditText(this);
-        wifiPassword.setSingleLine(true);
-        wifiPassword.setTextColor(INK);
-        wifiPassword.setHintTextColor(MUTED);
-        wifiPassword.setHint("New Wi-Fi Direct password");
-        wifiPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
-            android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        add(settingsPanel, wifiPassword, 4);
-        add(settingsPanel, label("8–63 letters, numbers, spaces or symbols. Leave blank to keep the saved password.", 14, MUTED), 4);
-        add(content, label("Share a connection", 18, INK), 20);
+        section(content, "Sharing");
         wifi = modeButton(content, "Wi-Fi Direct", "Create a network for nearby devices");
         wifi.setOnClickListener(view -> {
             if (checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED) start(HostService.WIFI);
@@ -150,6 +136,9 @@ public final class MainActivity extends Activity {
         vpn = modeButton(content, "Tailscale", "Share with devices on your tailnet");
         vpn.setOnClickListener(view -> start(HostService.VPN));
 
+        section(content, "Settings");
+        var hotspot = listRow(content, "Wi-Fi Direct settings", "Network name, password and band", "›");
+        hotspot.setOnClickListener(v -> hotspotDialog());
         expandable(content, "Connection settings", settingsPanel);
         expandable(content, "Activity & diagnostics", activityPanel);
         refresh.run();
@@ -164,55 +153,111 @@ public final class MainActivity extends Activity {
             return;
         }
         String ip = address.getText().toString().trim();
-        int band = wifiBand.getSelectedItemPosition();
-        String newWifiPassword = HostService.WIFI.equals(action) ? wifiPassword.getText().toString() : "";
-        if (!newWifiPassword.isEmpty() && !HostService.validWifiPassword(newWifiPassword)) {
-            settingsPanel.setVisibility(View.VISIBLE);
-            wifiPassword.setError("Use 8–63 printable ASCII characters");
-            wifiPassword.requestFocus();
-            return;
-        }
-        if (HostService.WIFI.equals(action)) {
-            getPreferences(MODE_PRIVATE).edit().putInt("wifiBand", band).apply();
-        }
+        int band = getPreferences(MODE_PRIVATE).getInt("wifiBand", 0);
         startForegroundService(new Intent(this, HostService.class).setAction(action)
             .putExtra("address", ip).putExtra("wifiBand", band)
-            .putExtra("wifiPassword", newWifiPassword)
+
             .putExtra("proxyPassword", password).putExtra("mobileOnly", mobileOnly.isChecked()));
-        if (HostService.WIFI.equals(action)) wifiPassword.setText("");
+
     }
 
     private LinearLayout panel() {
         var panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setBackgroundColor(0xff242b25);
+        panel.setBackgroundColor(0xff181d20);
         panel.setPadding(dp(12), dp(12), dp(12), dp(12));
         return panel;
     }
 
-    private Button modeButton(LinearLayout parent, String title, String description) {
-        var row = panel();
-        var action = button(title);
-        action.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-        action.setContentDescription("Start " + title);
-        add(row, action, 0);
-        add(row, label(description, 14, MUTED), 4);
-        add(parent, row, 8);
-        return action;
+    private void section(LinearLayout parent, String text) {
+        var heading = label(text, 13, ACCENT);
+        heading.setBackgroundColor(0xff20272a);
+        heading.setPadding(dp(16), dp(5), dp(16), dp(5));
+        add(parent, heading, 0);
+    }
+
+    private View listRow(LinearLayout parent, String title, String subtitle, String indicator) {
+        var row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(16), dp(10), dp(16), dp(10));
+        row.setMinimumHeight(dp(50));
+        var background = new android.util.TypedValue();
+        getTheme().resolveAttribute(android.R.attr.selectableItemBackground, background, true);
+        row.setBackgroundResource(background.resourceId);
+        row.setFocusable(true);
+        var labels = new LinearLayout(this);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
+        add(labels, label(title, 18, INK), 0);
+        if (!subtitle.isEmpty()) add(labels, label(subtitle, 14, MUTED), 2);
+        var mark = label(indicator, 22, MUTED);
+        mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        row.addView(mark);
+        add(parent, row, 0);
+        var divider = new View(this);
+        divider.setBackgroundColor(0xff2a3033);
+        parent.addView(divider, new LinearLayout.LayoutParams(-1, dp(1)));
+        return row;
+    }
+
+    private View modeButton(LinearLayout parent, String title, String description) {
+        return listRow(parent, title, description, "○");
+    }
+
+    private void modeState(View view, String title, boolean running) {
+        var row = (LinearLayout) view;
+        boolean selected = running && title.equals(HostService.diagnosticMode);
+        var mark = (TextView) row.getChildAt(1);
+        mark.setText(selected ? "●" : "○");
+        mark.setTextColor(selected ? ACCENT : MUTED);
+        row.setEnabled(!running);
+        row.setStateDescription(selected ? "Sharing" : "Off");
     }
 
     private void expandable(LinearLayout parent, String title, LinearLayout panel) {
         panel.setVisibility(View.GONE);
-        var control = button(title);
-        control.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-        add(parent, control, 12);
+        var control = (LinearLayout) listRow(parent, title, "", "›");
         add(parent, panel, 0);
         control.setOnClickListener(view -> {
             boolean expanded = panel.getVisibility() != View.VISIBLE;
             panel.setVisibility(expanded ? View.VISIBLE : View.GONE);
+            ((TextView) control.getChildAt(1)).setText(expanded ? "⌄" : "›");
             control.setStateDescription(expanded ? "Expanded" : "Collapsed");
         });
         control.setStateDescription("Collapsed");
+    }
+
+    private void hotspotDialog() {
+        var body = panel();
+        var prefs = getSharedPreferences("host", MODE_PRIVATE);
+        add(body, label("Network name", 14, MUTED), 0);
+        add(body, label("DIRECT-JN-jNet", 18, INK), 2);
+        add(body, label("New password", 14, MUTED), 12);
+        var password = new EditText(this);
+        password.setSingleLine(true);
+        password.setInputType(129);
+        password.setHint("Leave blank to keep current");
+        add(body, password, 0);
+        add(body, label("Band", 14, MUTED), 10);
+        var band = new Spinner(this);
+        var adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
+            new String[]{"Auto", "2.4 GHz", "5 GHz"});
+        band.setAdapter(adapter);
+        band.setSelection(HostService.bandIndex(getPreferences(MODE_PRIVATE).getInt("wifiBand", 0)));
+        add(body, band, 4);
+        if (HostService.active) add(body, label("Changes apply the next time you start Wi-Fi Direct.", 14, MUTED), 8);
+        var dialog = new android.app.AlertDialog.Builder(this).setTitle("Wi-Fi Direct settings")
+            .setView(body).setNegativeButton("Cancel", null).setPositiveButton("Save", null).show();
+        dialog.getButton(-1).setOnClickListener(v -> {
+            String value = password.getText().toString();
+            if (!value.isEmpty() && !HostService.validWifiPassword(value)) {
+                password.setError("Use 8–63 printable ASCII characters");
+                return;
+            }
+            if (!value.isEmpty()) prefs.edit().putString("password", value).apply();
+            getPreferences(MODE_PRIVATE).edit().putInt("wifiBand", band.getSelectedItemPosition()).apply();
+            dialog.dismiss();
+        });
     }
 
     @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] grants) {
@@ -240,12 +285,13 @@ public final class MainActivity extends Activity {
             setupQr.setVisibility(hasScannableEndpoint() ? View.VISIBLE : View.GONE);
             boolean running = HostService.active;
             proxyPassword.setEnabled(!running);
-            wifiPassword.setEnabled(!running);
             mobileOnly.setEnabled(!running);
-            wifi.setEnabled(!running);
-            wifiBand.setEnabled(!running);
-            lan.setEnabled(!running);
-            vpn.setEnabled(!running);
+            stateLabel.setText(running ? "●  Sharing" : "○  Offline");
+            stateLabel.setTextColor(running ? ACCENT : MUTED);
+            connection.setVisibility(running || !("Idle".equals(state) || "Stopped".equals(state)) ? View.VISIBLE : View.GONE);
+            modeState(wifi, "Wi-Fi Direct", running);
+            modeState(lan, "Current Wi-Fi", running);
+            modeState(vpn, "Tailscale", running);
             stop.setVisibility(running ? View.VISIBLE : View.GONE);
             handler.postDelayed(this, 300);
         }
@@ -332,7 +378,7 @@ public final class MainActivity extends Activity {
 
         @Override protected void onDraw(android.graphics.Canvas canvas) {
             super.onDraw(canvas);
-            canvas.drawColor(0xff242b25);
+            canvas.drawColor(0xff181d20);
             float max = 1;
             for (int i = 0; i < sent.length; i++) max = Math.max(max, Math.max(sent[i], received[i]));
             paint.setStrokeWidth(3);
