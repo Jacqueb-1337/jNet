@@ -1,0 +1,23 @@
+# jNet
+
+Android host for a SOCKS5 proxy over Wi-Fi Direct or Tailscale. Requires Android 13+. This source preview still needs a build and hardware verification.
+
+## Connect a computer
+
+Start Wi-Fi Direct and use your computer's Wi-Fi settings to join the network shown in jNet. For Tailscale, connect both devices, allow the computer to reach TCP 1080 on the phone in your tailnet policy, then start the tailnet proxy using the phone's Tailscale IPv4 address. Proxy access is unauthenticated, so only allow clients you want to share with.
+
+Firefox on Windows or Linux: **Settings → General → Network Settings → Settings → Manual proxy configuration**. Enter the displayed IP and port in **SOCKS Host**, choose **SOCKS v5**, and enable **Proxy DNS when using SOCKS v5**. This routes Firefox traffic only. For a quick terminal check on either platform, use:
+
+    curl --proxy socks5h://PHONE_IP:1080 https://example.com
+
+Use `curl.exe` in Windows PowerShell if `curl` resolves to an alias.
+
+SOCKS supports TCP CONNECT. UDP and system-wide routing are outside this preview. A Tailscale exit node is the separate feature for routing the entire PC through an approved device. SOCKS does not enroll the computer in Tailscale or in the phone's other VPN.
+
+## Build and release
+
+With JDK 17, Gradle 8.9, and Android SDK 35, run `gradle :app:assembleDebug :app:lintDebug`.
+
+To release, increment `versionCode`, update `versionName`, then tag the commit `v<versionName>`. The workflow builds, verifies the signature and attaches the Android APK to a prerelease. Configure `JNET_KEYSTORE_BASE64` and `JNET_KEYSTORE_PASSWORD` once using a PKCS#12 signing key with alias `jnet`. Keep the same key for app updates.
+
+PdaNet wire compatibility, USB and the auto-reconnecting Android VPN client are still pending.
