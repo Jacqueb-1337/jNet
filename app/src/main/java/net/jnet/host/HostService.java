@@ -3,7 +3,9 @@ package net.jnet.host;
 import android.app.*;
 import android.content.*;
 import android.net.ConnectivityManager;
+import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.net.wifi.p2p.*;
 import android.os.*;
 import java.net.*;
@@ -15,6 +17,8 @@ public final class HostService extends Service {
     static String details = "";
     static String endpoint = "";
     static boolean active;
+    static String proxyPassword = "";
+    static String upstreamStatus = "";
     private final Handler handler = new Handler(Looper.getMainLooper());
     private WifiP2pManager manager;
     private WifiP2pManager.Channel channel;
@@ -26,6 +30,13 @@ public final class HostService extends Service {
     private int wifiBand;
     static int bandIndex(int band) { return band == 1 || band == 2 ? band : 0; }
     private String vpnOverride;
+    private boolean mobileOnly;
+    private Network mobileNetwork;
+    private Network boundNetwork;
+    private Network checkedNetwork;
+    private ConnectivityManager.NetworkCallback mobileCallback;
+    private boolean checkingInternet;
+    private long nextCheck;
     private static final long RETRY_MS = 2000;
 
     @Override public IBinder onBind(Intent intent) { return null; }
@@ -51,8 +62,32 @@ public final class HostService extends Service {
         details = "";
         vpnOverride = intent.getStringExtra("address");
         wifiBand = bandIndex(intent.getIntExtra("wifiBand", 0));
+        proxyPassword = Objects.toString(intent.getStringExtra("proxyPassword"), "");
+        mobileOnly = LAN.equals(mode) && intent.getBooleanExtra("mobileOnly", false);
+        if (mobileOnly) {
+            try {
+                requestMobile();
+            } catch (RuntimeException exception) {
+                fail("Android could not request mobile data.");
+                return START_NOT_STICKY;
+            }
+        }
         reconnect();
         return START_NOT_STICKY;
+    }
+
+    private void requestMobile() {
+        var connectivity = getSystemService(ConnectivityManager.class);
+        mobileCallback = new ConnectivityManager.NetworkCallback() {
+            @Override public void onAvailable(Network network) { mobileNetwork = network; }
+            @Override public void onLost(Network network) {
+                if (network.equals(mobileNetwork)) mobileNetwork = null;
+            }
+        };
+        connectivity.requestNetwork(new NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(), mobileCallback, handler);
     }
 
     private void reconnect() {
@@ -90,11 +125,56 @@ public final class HostService extends Service {
             retry("Waiting for a Wi-Fi network with an IPv4 address…");
             return;
         }
-        if (!endpoint.equals(address.getHostAddress() + ":" + SocksProxy.PORT)) {
+        if (mobileOnly && mobileNetwork == null) {
+            retry("Waiting for mobile data. Turn on mobile data to continue.");
+            return;
+        }
+        Network requested = mobileOnly ? mobileNetwork : null;
+        if (!endpoint.equals(address.getHostAddress() + ":" + SocksProxy.PORT) ||
+            !Objects.equals(boundNetwork, requested)) {
             closeProxies();
+            boundNetwork = requested;
             if (!listen(address, "Current Wi-Fi")) return;
         }
+        checkInternet(mobileOnly ? mobileNetwork : connectivity.getActiveNetwork(), connectivity);
         handler.postDelayed(this::reconnect, RETRY_MS);
+    }
+
+    private void checkInternet(Network network, ConnectivityManager connectivity) {
+        if (network == null) { upstreamStatus = "Internet: no outbound network"; return; }
+        var caps = connectivity.getNetworkCapabilities(network);
+        String transport = caps == null ? "selected network" :
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ? "VPN" :
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ? "mobile data" :
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ? "Wi-Fi" : "selected network";
+        if (checkingInternet || (network.equals(checkedNetwork) && SystemClock.elapsedRealtime() < nextCheck)) return;
+        checkingInternet = true;
+        checkedNetwork = network;
+        upstreamStatus = "Internet via " + transport + ": checking…";
+        new Thread(() -> {
+            boolean reachable = false;
+            HttpURLConnection connection = null;
+            try {
+                connection = (HttpURLConnection) network.openConnection(
+                    new URL("https://connectivitycheck.gstatic.com/generate_204"));
+                connection.setConnectTimeout(4000);
+                connection.setReadTimeout(4000);
+                connection.setInstanceFollowRedirects(false);
+                reachable = connection.getResponseCode() == 204;
+            } catch (java.io.IOException ignored) {
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+            boolean result = reachable;
+            handler.post(() -> {
+                checkingInternet = false;
+                if (!LAN.equals(mode) || proxy == null) return;
+                var current = mobileOnly ? mobileNetwork : connectivity.getActiveNetwork();
+                if (!network.equals(current)) { nextCheck = 0; return; }
+                nextCheck = SystemClock.elapsedRealtime() + 30000;
+                upstreamStatus = "Internet via " + transport + (result ? ": reachable" : ": check failed");
+            });
+        }, "jNet internet check").start();
     }
 
     private void retry(String message) {
@@ -238,7 +318,7 @@ public final class HostService extends Service {
             retry("Waiting for the selected Tailscale address…");
             return;
         }
-        localProxy = new SocksProxy(InetAddress.getByName("127.0.0.1"), false);
+        localProxy = new SocksProxy(InetAddress.getByName("127.0.0.1"), false, null, proxyPassword);
         listen(ip, "Tailnet only");
         if (proxy != null) handler.postDelayed(() -> checkVpn(ip), 2000);
     }
@@ -255,7 +335,7 @@ public final class HostService extends Service {
 
     private boolean listen(InetAddress ip, String connectionDetails) {
         try {
-            proxy = new SocksProxy(ip, WIFI.equals(mode) || LAN.equals(mode));
+            proxy = new SocksProxy(ip, WIFI.equals(mode) || LAN.equals(mode), boundNetwork, proxyPassword);
             endpoint = ip.getHostAddress() + ":" + SocksProxy.PORT;
             details = connectionDetails + "\nSOCKS5   " + endpoint;
             status = "Sharing";
@@ -273,6 +353,8 @@ public final class HostService extends Service {
         localProxy = null;
         endpoint = "";
         details = "";
+        upstreamStatus = "";
+        nextCheck = 0;
     }
 
     private void fail(String message) {
@@ -292,6 +374,12 @@ public final class HostService extends Service {
         boolean running = active;
         active = false;
         mode = null;
+        proxyPassword = "";
+        if (mobileCallback != null) {
+            try {
+                getSystemService(ConnectivityManager.class).unregisterNetworkCallback(mobileCallback);
+            } catch (IllegalArgumentException ignored) {}
+        }
         handler.removeCallbacksAndMessages(null);
         closeProxies();
         removeGroup();

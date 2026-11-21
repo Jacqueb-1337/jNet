@@ -17,6 +17,8 @@ public final class MainActivity extends Activity {
     private Button wifi, lan, vpn, stop, copyEndpoint;
     private Button setupQr;
     private Spinner wifiBand;
+    private EditText proxyPassword;
+    private CheckBox mobileOnly;
     private static final int INK = 0xfff1f0df, MUTED = 0xffb5b8ab, ACCENT = 0xffd4ec7d;
 
     @Override public void onCreate(Bundle state) {
@@ -72,6 +74,15 @@ public final class MainActivity extends Activity {
                 + "Current Wi-Fi and Wi-Fi Direct support TCP and UDP. Tailscale supports TCP.")
             .setPositiveButton("Done", null)
             .show());
+        proxyPassword = new EditText(this);
+        proxyPassword.setSingleLine(true);
+        proxyPassword.setTextColor(INK);
+        proxyPassword.setHintTextColor(MUTED);
+        proxyPassword.setHint("Proxy password (optional)");
+        proxyPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
+            android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        add(content, proxyPassword, 12);
+        add(content, label("If you set a password, use jnet as the SOCKS5 username.", 14, MUTED), 4);
 
         add(content, label("Nearby devices", 20, INK), 32);
         add(content, label("Join this phone’s Wi-Fi network, then enter the SOCKS5 address in your client.", 16, MUTED), 6);
@@ -94,6 +105,10 @@ public final class MainActivity extends Activity {
 
         add(content, label("Current Wi-Fi", 20, INK), 26);
         add(content, label("Join the same trusted router on both devices. The phone needs its own internet connection.", 16, MUTED), 6);
+        mobileOnly = new CheckBox(this);
+        mobileOnly.setText("Use mobile data for proxy traffic");
+        mobileOnly.setTextColor(INK);
+        add(content, mobileOnly, 4);
         lan = button("Share on current Wi-Fi");
         add(content, lan, 10);
         lan.setOnClickListener(view -> start(HostService.LAN));
@@ -117,13 +132,19 @@ public final class MainActivity extends Activity {
     }
 
     private void start(String action) {
+        String password = proxyPassword.getText().toString();
+        if (password.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 255) {
+            proxyPassword.setError("Maximum 255 UTF-8 bytes");
+            return;
+        }
         String ip = address.getText().toString().trim();
         int band = wifiBand.getSelectedItemPosition();
         if (HostService.WIFI.equals(action)) {
             getPreferences(MODE_PRIVATE).edit().putInt("wifiBand", band).apply();
         }
         startForegroundService(new Intent(this, HostService.class).setAction(action)
-            .putExtra("address", ip).putExtra("wifiBand", band));
+            .putExtra("address", ip).putExtra("wifiBand", band)
+            .putExtra("proxyPassword", password).putExtra("mobileOnly", mobileOnly.isChecked()));
     }
 
     @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] grants) {
@@ -135,11 +156,18 @@ public final class MainActivity extends Activity {
     private final Runnable refresh = new Runnable() {
         @Override public void run() {
             if (!HostService.status.contentEquals(status.getText())) status.setText(HostService.status);
-            if (!HostService.details.contentEquals(details.getText())) details.setText(HostService.details);
+            String summary = HostService.details;
+            if (!HostService.upstreamStatus.isEmpty()) summary += "\n" + HostService.upstreamStatus;
+            if (!HostService.endpoint.isEmpty() && !HostService.proxyPassword.isEmpty()) {
+                summary += "\nProxy login   jnet";
+            }
+            if (!summary.contentEquals(details.getText())) details.setText(summary);
             details.setVisibility(HostService.details.isEmpty() ? View.GONE : View.VISIBLE);
             copyEndpoint.setVisibility(HostService.endpoint.isEmpty() ? View.GONE : View.VISIBLE);
             setupQr.setVisibility(hasScannableEndpoint() ? View.VISIBLE : View.GONE);
             boolean running = HostService.active;
+            proxyPassword.setEnabled(!running);
+            mobileOnly.setEnabled(!running);
             wifi.setEnabled(!running);
             wifiBand.setEnabled(!running);
             lan.setEnabled(!running);
@@ -155,7 +183,9 @@ public final class MainActivity extends Activity {
 
     private void showSetupQr() {
         if (!hasScannableEndpoint()) return;
-        String uri = "socks5://" + HostService.endpoint + "#jNet";
+        String password = HostService.proxyPassword;
+        String credentials = password.isEmpty() ? "" : "jnet:" + android.net.Uri.encode(password) + "@";
+        String uri = "socks5://" + credentials + HostService.endpoint + "#jNet";
         try {
             var matrix = new com.google.zxing.qrcode.QRCodeWriter()
                 .encode(uri, com.google.zxing.BarcodeFormat.QR_CODE, 768, 768);
@@ -177,6 +207,9 @@ public final class MainActivity extends Activity {
             panel.setOrientation(LinearLayout.VERTICAL);
             panel.setPadding(dp(20), dp(8), dp(20), 0);
             add(panel, label("On the other device, open Potatso or NekoBox and use its QR scanner.", 16, INK), 0);
+            if (!password.isEmpty()) {
+                add(panel, label("This QR includes your proxy password.", 14, MUTED), 6);
+            }
             add(panel, qr, 12);
             new android.app.AlertDialog.Builder(this)
                 .setTitle("Scan to add jNet")

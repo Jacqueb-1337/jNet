@@ -5,17 +5,22 @@ import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.concurrent.*;
+import android.net.Network;
 
 final class SocksProxy implements Closeable {
     static final int PORT = 1080;
     private final ServerSocket server;
     private final boolean udpEnabled;
+    private final Network upstreamNetwork;
+    private final byte[] password;
     private final ExecutorService workers = Executors.newFixedThreadPool(64);
     private final Semaphore capacity = new Semaphore(32);
     private final Set<Socket> sockets = ConcurrentHashMap.newKeySet();
 
-    SocksProxy(InetAddress address, boolean udpEnabled) throws IOException {
+    SocksProxy(InetAddress address, boolean udpEnabled, Network upstreamNetwork, String password) throws IOException {
         this.udpEnabled = udpEnabled;
+        this.upstreamNetwork = upstreamNetwork;
+        this.password = password.getBytes(StandardCharsets.UTF_8);
         server = new ServerSocket();
         try {
             server.bind(new InetSocketAddress(address, PORT));
@@ -58,10 +63,12 @@ final class SocksProxy implements Closeable {
                 var output = client.getOutputStream();
                 if (input.readUnsignedByte() != 5) return;
                 int count = input.readUnsignedByte();
-                boolean noAuth = false;
-                for (int i = 0; i < count; i++) noAuth |= input.readUnsignedByte() == 0;
-                output.write(new byte[]{5, (byte) (noAuth ? 0 : 255)});
-                if (!noAuth || input.readUnsignedByte() != 5) return;
+                int method = password.length == 0 ? 0 : 2;
+                boolean offered = false;
+                for (int i = 0; i < count; i++) offered |= input.readUnsignedByte() == method;
+                output.write(new byte[]{5, (byte) (offered ? method : 255)});
+                if (!offered || (method == 2 && !authenticate(input, output)) ||
+                    input.readUnsignedByte() != 5) return;
                 int command = input.readUnsignedByte();
                 if (input.readUnsignedByte() != 0) return;
                 if (command != 1 && command != 3) { reply(output, 7); return; }
@@ -75,7 +82,8 @@ final class SocksProxy implements Closeable {
                 }
                 if (host.isBlank() || port == 0) { reply(output, 1); return; }
                 try {
-                    upstream.connect(new InetSocketAddress(host, port), 10000);
+                    if (upstreamNetwork != null) upstreamNetwork.bindSocket(upstream);
+                    upstream.connect(destination(host, port), 10000);
                 } catch (IOException e) {
                     reply(output, e instanceof ConnectException ? 5 : 4);
                     return;
@@ -98,6 +106,21 @@ final class SocksProxy implements Closeable {
         }
     }
 
+    private boolean authenticate(DataInputStream input, OutputStream output) throws IOException {
+        if (input.readUnsignedByte() != 1) return false;
+        byte[] username = read(input, input.readUnsignedByte());
+        byte[] supplied = read(input, input.readUnsignedByte());
+        boolean accepted = java.security.MessageDigest.isEqual(username, new byte[]{'j','n','e','t'})
+            & java.security.MessageDigest.isEqual(supplied, password);
+        output.write(new byte[]{1, (byte) (accepted ? 0 : 1)});
+        return accepted;
+    }
+
+    private InetSocketAddress destination(String host, int port) throws UnknownHostException {
+        return new InetSocketAddress(upstreamNetwork == null ? InetAddress.getByName(host)
+            : upstreamNetwork.getByName(host), port);
+    }
+
     private static String readHost(DataInputStream input) throws IOException {
         return switch (input.readUnsignedByte()) {
             case 1 -> InetAddress.getByAddress(read(input, 4)).getHostAddress();
@@ -110,6 +133,7 @@ final class SocksProxy implements Closeable {
     private void relayUdp(Socket control, int requestedPort) throws IOException {
         try (var relay = new DatagramSocket(new InetSocketAddress(control.getLocalAddress(), 0));
              var upstream = new DatagramSocket()) {
+            if (upstreamNetwork != null) upstreamNetwork.bindSocket(upstream);
             var header = new DataOutputStream(control.getOutputStream());
             header.write(new byte[]{5, 0, 0});
             writeAddress(header, relay.getLocalAddress(), relay.getLocalPort());
@@ -133,7 +157,7 @@ final class SocksProxy implements Closeable {
                         if (host == null || host.isBlank() || port == 0) continue;
                         client.compareAndSet(null, sender);
                         if (!sender.equals(client.get())) continue;
-                        var destination = new InetSocketAddress(host, port);
+                        var destination = destination(host, port);
                         if (destination.isUnresolved()) continue;
                         long now = System.nanoTime();
                         peers.entrySet().removeIf(entry -> now - entry.getValue() > TimeUnit.MINUTES.toNanos(2));
