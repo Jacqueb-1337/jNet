@@ -1,6 +1,6 @@
 # jNet
 
-Android host for a SOCKS5 proxy over Wi-Fi Direct, Tailscale, or a USB cable. Requires Android 13+. This source preview still needs a build and hardware verification.
+Android host for a SOCKS5 proxy over Wi-Fi Direct or Tailscale. Requires Android 13+.
 
 ## Connect a computer
 
@@ -16,14 +16,12 @@ Firefox on Windows or Linux: **Settings → General → Network Settings → Set
 
 Use `curl.exe` in Windows PowerShell if `curl` resolves to an alias.
 
-For USB, install Android Platform Tools on Windows or Linux, enable USB debugging on the phone, and approve the computer when Android prompts. Start the USB proxy in jNet, then run `adb -d forward tcp:1080 tcp:1080`. Configure your SOCKS client for `127.0.0.1:1080`. To detach the forwarding rule, use `adb -d forward --remove tcp:1080`. This is jNet's own SOCKS transport and requires no PdaNet desktop software.
+SOCKS supports TCP CONNECT in both modes. Wi-Fi Direct also supports UDP ASSOCIATE for clients that enable it. The client must keep its TCP association open and send unfragmented SOCKS datagrams. Tailscale mode supports TCP. Use any compatible SOCKS5 client. Choose a client with TUN or VPN mode if you want it to route eligible apps without configuring each app separately.
 
-SOCKS supports TCP CONNECT in every mode. Wi-Fi Direct also supports UDP ASSOCIATE for clients that enable it. The client must keep its TCP association open and send unfragmented SOCKS datagrams. USB and Tailscale modes remain TCP-only. A Tailscale exit node is a separate feature for routing the entire PC through an approved device.
+jNet retries hosting after a network interruption until you tap **Stop sharing**. Clients reconnect using their own retry settings. If the proxy address changes, copy the new address or scan the updated setup QR.
 
 ## Build and release
 
 With JDK 17, Gradle 8.9, and Android SDK 35, run `gradle :app:assembleDebug :app:lintDebug`.
 
 To release, increment `versionCode`, update `versionName`, then tag the commit `v<versionName>`. The workflow builds, verifies the signature and attaches the Android APK to a prerelease. Configure `JNET_KEYSTORE_BASE64` and `JNET_KEYSTORE_PASSWORD` once using a PKCS#12 signing key with alias `jnet`. Keep the same key for app updates.
-
-PdaNet wire compatibility and the auto-reconnecting Android VPN client are still pending.

@@ -8,10 +8,11 @@ import java.net.*;
 import java.util.*;
 
 public final class HostService extends Service {
-    static final String WIFI = "wifi", VPN = "vpn", USB = "usb", STOP = "stop";
+    static final String WIFI = "wifi", VPN = "vpn", STOP = "stop";
     static String status = "Idle";
     static String details = "";
     static String endpoint = "";
+    static boolean active;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private WifiP2pManager manager;
     private WifiP2pManager.Channel channel;
@@ -20,6 +21,8 @@ public final class HostService extends Service {
     private String mode;
     private boolean ownsGroup;
     private int attempts;
+    private String vpnOverride;
+    private static final long RETRY_MS = 2000;
 
     @Override public IBinder onBind(Intent intent) { return null; }
 
@@ -31,6 +34,7 @@ public final class HostService extends Service {
         }
         if (mode != null) return START_NOT_STICKY;
         mode = action;
+        active = true;
         var notifications = getSystemService(NotificationManager.class);
         notifications.createNotificationChannel(new NotificationChannel("host", "Sharing status", NotificationManager.IMPORTANCE_LOW));
         var stop = PendingIntent.getService(this, 0, new Intent(this, HostService.class).setAction(STOP), PendingIntent.FLAG_IMMUTABLE);
@@ -41,20 +45,42 @@ public final class HostService extends Service {
 
         status = "Starting…";
         details = "";
+        vpnOverride = intent.getStringExtra("address");
+        reconnect();
+        return START_NOT_STICKY;
+    }
+
+    private void reconnect() {
+        if (mode == null) return;
         try {
             if (WIFI.equals(mode)) startWifi();
-            else if (USB.equals(mode)) listen(InetAddress.getByName("127.0.0.1"), "USB debugging and ADB forwarding required");
-            else startVpn(intent.getStringExtra("address"));
+            else startVpn(vpnOverride);
+        } catch (SecurityException e) {
+            fail("Permission required to share the connection.");
         } catch (Exception e) {
-            fail("Could not start: " + e.getMessage());
+            retry("Could not start the proxy. Retrying…");
         }
-        return START_NOT_STICKY;
+    }
+
+    private void retry(String message) {
+        closeProxies();
+        status = message;
+        handler.removeCallbacksAndMessages(null);
+        handler.postDelayed(this::reconnect, RETRY_MS);
     }
 
     private void startWifi() {
         manager = getSystemService(WifiP2pManager.class);
         if (manager == null) { fail("Wi-Fi Direct is unavailable on this device."); return; }
-        channel = manager.initialize(this, getMainLooper(), () -> fail("Wi-Fi Direct disconnected."));
+        if (channel == null) {
+            channel = manager.initialize(this, getMainLooper(), () -> {
+                channel = null;
+                ownsGroup = false;
+                if (WIFI.equals(mode)) retry("Wi-Fi Direct disconnected. Reconnecting…");
+            });
+        }
+        if (channel == null) { retry("Waiting for Wi-Fi Direct…"); return; }
+        if (ownsGroup) { readWifi(); return; }
         var preferences = getSharedPreferences("host", MODE_PRIVATE);
         String password = preferences.getString("password", null);
         if (password == null) {
@@ -63,32 +89,63 @@ public final class HostService extends Service {
         }
         var config = new WifiP2pConfig.Builder()
             .setNetworkName("DIRECT-JN-jNet").setPassphrase(password).build();
-        manager.createGroup(channel, config, new WifiP2pManager.ActionListener() {
+        var creatingChannel = channel;
+        String expectedPassword = password;
+        manager.createGroup(creatingChannel, config, new WifiP2pManager.ActionListener() {
             @Override public void onSuccess() {
+                if (mode == null) { manager.removeGroup(creatingChannel, null); return; }
+                if (channel != creatingChannel) return;
                 ownsGroup = true;
-                if (mode == null) { removeGroup(); return; }
+                attempts = 0;
                 readWifi();
             }
-            @Override public void onFailure(int reason) { fail("Wi-Fi Direct could not start (" + reason + ")."); }
+            @Override public void onFailure(int reason) {
+                if (!WIFI.equals(mode) || channel != creatingChannel) return;
+                manager.requestGroupInfo(creatingChannel, group -> {
+                    if (!WIFI.equals(mode) || channel != creatingChannel) return;
+                    if (group != null && group.isGroupOwner() &&
+                        "DIRECT-JN-jNet".equals(group.getNetworkName()) &&
+                        expectedPassword.equals(group.getPassphrase())) {
+                        ownsGroup = true;
+                        attempts = 0;
+                        readWifi();
+                    } else {
+                        retry("Waiting for Wi-Fi Direct…");
+                    }
+                });
+            }
         });
     }
 
     private void readWifi() {
-        manager.requestGroupInfo(channel, group -> {
-            if (mode == null) return;
-            if (group == null || !group.isGroupOwner()) { retryWifi(); return; }
-            manager.requestConnectionInfo(channel, connection -> {
-                if (mode == null) return;
-                if (connection == null || connection.groupOwnerAddress == null) { retryWifi(); return; }
-                listen(connection.groupOwnerAddress,
-                    "Network   " + group.getNetworkName() + "\nPassword   " + group.getPassphrase());
+        var readingChannel = channel;
+        manager.requestGroupInfo(readingChannel, group -> {
+            if (!WIFI.equals(mode) || channel != readingChannel) return;
+            if (group == null || !group.isGroupOwner() || !"DIRECT-JN-jNet".equals(group.getNetworkName())) {
+                closeProxies();
+                status = "Wi-Fi Direct disconnected. Reconnecting…";
+                if (++attempts < 8) handler.postDelayed(this::readWifi, 500);
+                else {
+                    ownsGroup = false;
+                    retry(status);
+                }
+                return;
+            }
+            manager.requestConnectionInfo(readingChannel, connection -> {
+                if (!WIFI.equals(mode) || channel != readingChannel) return;
+                if (connection == null || !connection.groupFormed || connection.groupOwnerAddress == null) {
+                    retry("Waiting for a Wi-Fi Direct address…");
+                    return;
+                }
+                if (!endpoint.equals(connection.groupOwnerAddress.getHostAddress() + ":" + SocksProxy.PORT)) {
+                    closeProxies();
+                    if (!listen(connection.groupOwnerAddress,
+                        "Network   " + group.getNetworkName() + "\nPassword   " + group.getPassphrase())) return;
+                }
+                attempts = 0;
+                handler.postDelayed(this::readWifi, RETRY_MS);
             });
         });
-    }
-
-    private void retryWifi() {
-        if (++attempts < 20) handler.postDelayed(this::readWifi, 300);
-        else fail("Wi-Fi Direct did not provide an address.");
     }
 
     private void startVpn(String address) throws Exception {
@@ -109,7 +166,7 @@ public final class HostService extends Service {
                 }
             }
             if (candidates.size() != 1) {
-                fail("Connect Tailscale, or enter this phone’s Tailscale IPv4 address manually.");
+                retry("Waiting for Tailscale. Use the address override if auto-detection is unavailable.");
                 return;
             }
             address = candidates.iterator().next();
@@ -121,8 +178,12 @@ public final class HostService extends Service {
         var ip = InetAddress.getByName(address);
         byte[] bytes = ip.getAddress();
         int second = Byte.toUnsignedInt(bytes[1]);
-        if (second < 64 || second > 127 || NetworkInterface.getByInetAddress(ip) == null) {
-            fail("Connect Tailscale and enter the IPv4 address assigned to this phone.");
+        if (second < 64 || second > 127) {
+            fail("Enter the phone’s Tailscale IPv4 address.");
+            return;
+        }
+        if (NetworkInterface.getByInetAddress(ip) == null) {
+            retry("Waiting for the selected Tailscale address…");
             return;
         }
         localProxy = new SocksProxy(InetAddress.getByName("127.0.0.1"), false);
@@ -137,19 +198,33 @@ public final class HostService extends Service {
                 return;
             }
         } catch (SocketException ignored) {}
-        fail("The Tailscale address disconnected.");
+        retry("Tailscale disconnected. Reconnecting…");
     }
 
-    private void listen(InetAddress ip, String connectionDetails) {
+    private boolean listen(InetAddress ip, String connectionDetails) {
         try {
             proxy = new SocksProxy(ip, WIFI.equals(mode));
             endpoint = ip.getHostAddress() + ":" + SocksProxy.PORT;
             details = connectionDetails + "\nSOCKS5   " + endpoint;
             status = "Sharing";
-        } catch (Exception e) { fail("Could not bind the proxy: " + e.getMessage()); }
+            return true;
+        } catch (Exception e) {
+            retry("Could not bind the proxy. Retrying…");
+            return false;
+        }
+    }
+
+    private void closeProxies() {
+        if (proxy != null) proxy.close();
+        if (localProxy != null) localProxy.close();
+        proxy = null;
+        localProxy = null;
+        endpoint = "";
+        details = "";
     }
 
     private void fail(String message) {
+        active = false;
         status = message;
         details = "";
         stopSelf();
@@ -162,14 +237,14 @@ public final class HostService extends Service {
     }
 
     @Override public void onDestroy() {
-        endpoint = "";
+        boolean running = active;
+        active = false;
         mode = null;
         handler.removeCallbacksAndMessages(null);
-        if (proxy != null) proxy.close();
-        if (localProxy != null) localProxy.close();
+        closeProxies();
         removeGroup();
         details = "";
-        if (status.equals("Sharing") || status.equals("Starting…")) status = "Idle";
+        if (running) status = "Idle";
         super.onDestroy();
     }
 }
