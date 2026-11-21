@@ -14,7 +14,7 @@ public final class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView status, details;
     private EditText address;
-    private Button wifi, vpn, stop;
+    private Button wifi, vpn, usb, stop;
     private static final int INK = 0xfff1f0df, MUTED = 0xffb5b8ab, ACCENT = 0xffd4ec7d;
 
     @Override public void onCreate(Bundle state) {
@@ -71,6 +71,12 @@ public final class MainActivity extends Activity {
         add(content, vpn, 10);
         vpn.setOnClickListener(view -> start(HostService.VPN));
 
+        add(content, label("USB", 20, INK), 28);
+        add(content, label("Connect the cable and run adb forward tcp:1080 tcp:1080 on your computer.", 16, MUTED), 8);
+        usb = button("Start USB proxy");
+        add(content, usb, 12);
+        usb.setOnClickListener(view -> start(HostService.USB));
+
         stop = button("Stop sharing");
         add(content, stop, 20);
         stop.setOnClickListener(view -> stopService(new Intent(this, HostService.class)));
@@ -96,6 +102,7 @@ public final class MainActivity extends Activity {
             boolean running = HostService.status.equals("Sharing") || HostService.status.equals("Starting…");
             wifi.setEnabled(!running);
             vpn.setEnabled(!running);
+            usb.setEnabled(!running);
             stop.setVisibility(running ? View.VISIBLE : View.GONE);
             handler.postDelayed(this, 300);
         }

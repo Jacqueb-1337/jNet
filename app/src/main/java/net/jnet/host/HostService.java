@@ -8,13 +8,14 @@ import java.net.*;
 import java.util.*;
 
 public final class HostService extends Service {
-    static final String WIFI = "wifi", VPN = "vpn", STOP = "stop";
+    static final String WIFI = "wifi", VPN = "vpn", USB = "usb", STOP = "stop";
     static String status = "Idle";
     static String details = "";
     private final Handler handler = new Handler(Looper.getMainLooper());
     private WifiP2pManager manager;
     private WifiP2pManager.Channel channel;
     private SocksProxy proxy;
+    private SocksProxy localProxy;
     private String mode;
     private boolean ownsGroup;
     private int attempts;
@@ -41,6 +42,7 @@ public final class HostService extends Service {
         details = "";
         try {
             if (WIFI.equals(mode)) startWifi();
+            else if (USB.equals(mode)) listen(InetAddress.getByName("127.0.0.1"), "USB debugging and ADB forwarding required");
             else startVpn(intent.getStringExtra("address"));
         } catch (Exception e) {
             fail("Could not start: " + e.getMessage());
@@ -100,6 +102,7 @@ public final class HostService extends Service {
             fail("Connect Tailscale and enter the IPv4 address assigned to this phone.");
             return;
         }
+        localProxy = new SocksProxy(InetAddress.getByName("127.0.0.1"));
         listen(ip, "Tailnet only");
         if (proxy != null) handler.postDelayed(() -> checkVpn(ip), 2000);
     }
@@ -138,6 +141,7 @@ public final class HostService extends Service {
         mode = null;
         handler.removeCallbacksAndMessages(null);
         if (proxy != null) proxy.close();
+        if (localProxy != null) localProxy.close();
         removeGroup();
         details = "";
         if (status.equals("Sharing") || status.equals("Starting…")) status = "Idle";

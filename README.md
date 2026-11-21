@@ -1,6 +1,6 @@
 # jNet
 
-Android host for a SOCKS5 proxy over Wi-Fi Direct or Tailscale. Requires Android 13+. This source preview still needs a build and hardware verification.
+Android host for a SOCKS5 proxy over Wi-Fi Direct, Tailscale, or a USB cable. Requires Android 13+. This source preview still needs a build and hardware verification.
 
 ## Connect a computer
 
@@ -12,6 +12,8 @@ Firefox on Windows or Linux: **Settings → General → Network Settings → Set
 
 Use `curl.exe` in Windows PowerShell if `curl` resolves to an alias.
 
+For USB, install Android Platform Tools on Windows or Linux, enable USB debugging on the phone, and approve the computer when Android prompts. Start the USB proxy in jNet, then run `adb -d forward tcp:1080 tcp:1080`. Configure your SOCKS client for `127.0.0.1:1080`. To detach the forwarding rule, use `adb -d forward --remove tcp:1080`. This is jNet's own SOCKS transport and requires no PdaNet desktop software.
+
 SOCKS supports TCP CONNECT. UDP and system-wide routing are outside this preview. A Tailscale exit node is the separate feature for routing the entire PC through an approved device. SOCKS does not enroll the computer in Tailscale or in the phone's other VPN.
 
 ## Build and release
@@ -20,4 +22,4 @@ With JDK 17, Gradle 8.9, and Android SDK 35, run `gradle :app:assembleDebug :app
 
 To release, increment `versionCode`, update `versionName`, then tag the commit `v<versionName>`. The workflow builds, verifies the signature and attaches the Android APK to a prerelease. Configure `JNET_KEYSTORE_BASE64` and `JNET_KEYSTORE_PASSWORD` once using a PKCS#12 signing key with alias `jnet`. Keep the same key for app updates.
 
-PdaNet wire compatibility, USB and the auto-reconnecting Android VPN client are still pending.
+PdaNet wire compatibility and the auto-reconnecting Android VPN client are still pending.
