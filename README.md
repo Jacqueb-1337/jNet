@@ -25,19 +25,9 @@ Use `curl.exe` in Windows PowerShell if `curl` resolves to an alias.
 
 ### Windows TUN setup
 
-Install [Clash Verge Rev](https://github.com/clash-verge-rev/clash-verge-rev/releases). Save the following as `jnet.yaml`, replace the proxy address and port, then import it as a local profile. Select the profile and enable TUN mode. Set `udp: false` for Tailscale sharing. If jNet requires a proxy login, add `username: jnet` and `password: "your-password"` under the proxy entry.
-
-```yaml
-mode: rule
-proxies:
-  - name: jNet
-    type: socks5
-    server: 192.168.49.1
-    port: 1080
-    udp: true
-rules:
-  - MATCH,jNet
-```
+1. Join the Wi-Fi network shown in jNet. Open [v2rayN for Windows](https://github.com/2dust/v2rayN/releases/latest).
+2. Choose **Add [SOCKS]** in the configuration menu. Enter the address shown in jNet and port **1080**. If proxy authentication is enabled, enter username **jnet** and the SOCKS5 password.
+3. Save the profile and set it active. Choose **Global** proxy routing and turn on **Enable Tun**. Approve the Windows administrator prompt if requested.
 
 SOCKS supports TCP CONNECT in all modes. Current Wi-Fi and Wi-Fi Direct also support UDP ASSOCIATE for clients that enable it. The client must keep its TCP association open and send unfragmented SOCKS datagrams. Tailscale mode supports TCP. Use any compatible SOCKS5 client. Choose a client with TUN or VPN mode if you want it to route eligible apps without configuring each app separately.
 
