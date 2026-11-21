@@ -4,7 +4,11 @@ Android host for a SOCKS5 proxy over Wi-Fi Direct, Tailscale, or a USB cable. Re
 
 ## Connect a computer
 
-Start Wi-Fi Direct and use your computer's Wi-Fi settings to join the network shown in jNet. For Tailscale, connect both devices, allow the computer to reach TCP 1080 on the phone in your tailnet policy, then start the tailnet proxy using the phone's Tailscale IPv4 address. Proxy access is unauthenticated, so only allow clients you want to share with.
+Start Wi-Fi Direct and use your computer's Wi-Fi settings to join the network shown in jNet.
+
+For Tailscale, connect the phone and client independently using their own Tailscale apps and internet connections. The client needs tailnet access to TCP 1080 on the phone. On the phone, tap **Start tailnet proxy**. jNet looks for the VPN address automatically. If Android does not expose it, copy the IPv4 address from Tailscale and enter it in **Override IPv4 address**. Use **Copy proxy address** to copy the SOCKS5 endpoint. Proxy access is unauthenticated, so only allow clients you want to share with.
+
+If a client uses jNet's Wi-Fi Direct network as its only network connection, the SOCKS5 proxy alone does not provide the client with the network transport that the Tailscale app needs.
 
 Firefox on Windows or Linux: **Settings → General → Network Settings → Settings → Manual proxy configuration**. Enter the displayed IP and port in **SOCKS Host**, choose **SOCKS v5**, and enable **Proxy DNS when using SOCKS v5**. This routes Firefox traffic only. For a quick terminal check on either platform, use:
 

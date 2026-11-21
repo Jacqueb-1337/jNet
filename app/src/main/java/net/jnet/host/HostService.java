@@ -11,6 +11,7 @@ public final class HostService extends Service {
     static final String WIFI = "wifi", VPN = "vpn", USB = "usb", STOP = "stop";
     static String status = "Idle";
     static String details = "";
+    static String endpoint = "";
     private final Handler handler = new Handler(Looper.getMainLooper());
     private WifiP2pManager manager;
     private WifiP2pManager.Channel channel;
@@ -91,6 +92,28 @@ public final class HostService extends Service {
     }
 
     private void startVpn(String address) throws Exception {
+        if (address == null || address.isBlank()) {
+            var networks = getSystemService(android.net.ConnectivityManager.class);
+            var candidates = new HashSet<String>();
+            for (var network : networks.getAllNetworks()) {
+                var caps = networks.getNetworkCapabilities(network);
+                var links = networks.getLinkProperties(network);
+                if (caps == null || links == null ||
+                    !caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) continue;
+                for (var link : links.getLinkAddresses()) {
+                    byte[] bytes = link.getAddress().getAddress();
+                    if (bytes.length == 4 && bytes[0] == 100 &&
+                        Byte.toUnsignedInt(bytes[1]) >= 64 && Byte.toUnsignedInt(bytes[1]) <= 127) {
+                        candidates.add(link.getAddress().getHostAddress());
+                    }
+                }
+            }
+            if (candidates.size() != 1) {
+                fail("Connect Tailscale, or enter this phone’s Tailscale IPv4 address manually.");
+                return;
+            }
+            address = candidates.iterator().next();
+        }
         if (address == null || !address.matches("100\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}")) {
             fail("Enter the phone’s Tailscale IPv4 address.");
             return;
@@ -120,7 +143,8 @@ public final class HostService extends Service {
     private void listen(InetAddress ip, String connectionDetails) {
         try {
             proxy = new SocksProxy(ip);
-            details = connectionDetails + "\nSOCKS5   " + ip.getHostAddress() + ":" + SocksProxy.PORT;
+            endpoint = ip.getHostAddress() + ":" + SocksProxy.PORT;
+            details = connectionDetails + "\nSOCKS5   " + endpoint;
             status = "Sharing";
         } catch (Exception e) { fail("Could not bind the proxy: " + e.getMessage()); }
     }
@@ -138,6 +162,7 @@ public final class HostService extends Service {
     }
 
     @Override public void onDestroy() {
+        endpoint = "";
         mode = null;
         handler.removeCallbacksAndMessages(null);
         if (proxy != null) proxy.close();

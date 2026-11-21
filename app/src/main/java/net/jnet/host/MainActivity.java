@@ -14,7 +14,7 @@ public final class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView status, details;
     private EditText address;
-    private Button wifi, vpn, usb, stop;
+    private Button wifi, vpn, usb, stop, copyEndpoint;
     private static final int INK = 0xfff1f0df, MUTED = 0xffb5b8ab, ACCENT = 0xffd4ec7d;
 
     @Override public void onCreate(Bundle state) {
@@ -47,6 +47,13 @@ public final class MainActivity extends Activity {
         details.setTextIsSelectable(true);
         details.setLineSpacing(dp(6), 1);
         add(content, details, 12);
+        copyEndpoint = button("Copy proxy address");
+        add(content, copyEndpoint, 8);
+        copyEndpoint.setOnClickListener(view -> {
+            if (HostService.endpoint.isEmpty()) return;
+            getSystemService(android.content.ClipboardManager.class).setPrimaryClip(
+                android.content.ClipData.newPlainText("jNet proxy address", HostService.endpoint));
+        });
 
         add(content, label("Nearby devices", 20, INK), 32);
         add(content, label("Join this phone’s Wi-Fi network, then enter the SOCKS5 address in your client.", 16, MUTED), 6);
@@ -58,14 +65,13 @@ public final class MainActivity extends Activity {
         });
 
         add(content, label("Tailscale", 20, INK), 26);
-        add(content, label("Connect both devices to your tailnet. Enter this phone’s Tailscale IPv4 address.", 16, MUTED), 6);
+        add(content, label("Connect Tailscale here and on the client. jNet can find this phone’s VPN address automatically.", 16, MUTED), 6);
         address = new EditText(this);
         address.setSingleLine(true);
         address.setTextColor(INK);
         address.setHintTextColor(MUTED);
-        address.setHint("Phone’s Tailscale IPv4 address");
-        address.setInputType(android.text.InputType.TYPE_CLASS_PHONE);
-        address.setText(getPreferences(MODE_PRIVATE).getString("address", ""));
+        address.setHint("Override IPv4 address (optional)");
+        address.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
         add(content, address, 8);
         vpn = button("Start tailnet proxy");
         add(content, vpn, 10);
@@ -84,7 +90,6 @@ public final class MainActivity extends Activity {
 
     private void start(String action) {
         String ip = address.getText().toString().trim();
-        if (HostService.VPN.equals(action)) getPreferences(MODE_PRIVATE).edit().putString("address", ip).apply();
         startForegroundService(new Intent(this, HostService.class).setAction(action).putExtra("address", ip));
     }
 
@@ -99,6 +104,7 @@ public final class MainActivity extends Activity {
             if (!HostService.status.contentEquals(status.getText())) status.setText(HostService.status);
             if (!HostService.details.contentEquals(details.getText())) details.setText(HostService.details);
             details.setVisibility(HostService.details.isEmpty() ? View.GONE : View.VISIBLE);
+            copyEndpoint.setVisibility(HostService.endpoint.isEmpty() ? View.GONE : View.VISIBLE);
             boolean running = HostService.status.equals("Sharing") || HostService.status.equals("Starting…");
             wifi.setEnabled(!running);
             vpn.setEnabled(!running);
