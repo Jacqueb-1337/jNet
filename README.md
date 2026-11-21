@@ -4,6 +4,11 @@ Android host for a SOCKS5 proxy over current Wi-Fi, Wi-Fi Direct, or Tailscale. 
 
 ## Connect a computer
 
+For an offline router, connect both devices to its regular Wi-Fi network. On the phone, enable mobile data, select **Use mobile data for proxy traffic**, and tap **Share on current Wi-Fi**. If you set a proxy password, enter `jnet` as the SOCKS5 username. In Potatso or NekoBox, scan **Show setup QR** to import the proxy. On a computer, enter the displayed address and port in your SOCKS5 client.
+
+Start by loading a page through the configured client. For a UDP test, use a client with SOCKS5 UDP relay on and check that **Last UDP relay** changes. To test recovery, briefly disconnect and rejoin the phone's Wi-Fi, then check for new activity. If the proxy address changes, update the client. A router with client isolation can block the PC from reaching the phone.
+
+**Traffic** counts relayed payload bytes and shows live send and receive rates. The graph and peak rates cover the time the app screen has been sampling. **Share diagnostics** previews a report with the proxy address, upstream status, aggregate traffic, and recent events. The report excludes passwords, client addresses, and traffic destinations.
 Start Wi-Fi Direct and use your computer's Wi-Fi settings to join the network shown in jNet.
 
 If both devices already use the same trusted router, tap **Share on current Wi-Fi** instead. Use the address shown in jNet or scan its setup QR. The router can be offline if it allows devices to communicate locally and the phone keeps a working internet connection, such as mobile data. This mode uses Android's normal outbound routing. Devices that can reach the proxy can use it without a separate login.

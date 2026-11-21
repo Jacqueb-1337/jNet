@@ -19,6 +19,9 @@ public final class HostService extends Service {
     static boolean active;
     static String proxyPassword = "";
     static String upstreamStatus = "";
+    static SessionStats stats = new SessionStats();
+    static String diagnosticMode = "None";
+    static String diagnosticEndpoint = "";
     private final Handler handler = new Handler(Looper.getMainLooper());
     private WifiP2pManager manager;
     private WifiP2pManager.Channel channel;
@@ -49,6 +52,10 @@ public final class HostService extends Service {
         }
         if (mode != null) return START_NOT_STICKY;
         mode = action;
+        stats = new SessionStats();
+        diagnosticMode = WIFI.equals(mode) ? "Wi-Fi Direct" : LAN.equals(mode) ? "Current Wi-Fi" : "Tailscale";
+        diagnosticEndpoint = "";
+        stats.note("Sharing started");
         active = true;
         var notifications = getSystemService(NotificationManager.class);
         notifications.createNotificationChannel(new NotificationChannel("host", "Sharing status", NotificationManager.IMPORTANCE_LOW));
@@ -179,6 +186,7 @@ public final class HostService extends Service {
 
     private void retry(String message) {
         closeProxies();
+        if (!status.equals(message)) stats.note(message);
         status = message;
         handler.removeCallbacksAndMessages(null);
         handler.postDelayed(this::reconnect, RETRY_MS);
@@ -318,7 +326,7 @@ public final class HostService extends Service {
             retry("Waiting for the selected Tailscale address…");
             return;
         }
-        localProxy = new SocksProxy(InetAddress.getByName("127.0.0.1"), false, null, proxyPassword);
+        localProxy = new SocksProxy(InetAddress.getByName("127.0.0.1"), false, null, proxyPassword, stats);
         listen(ip, "Tailnet only");
         if (proxy != null) handler.postDelayed(() -> checkVpn(ip), 2000);
     }
@@ -335,8 +343,10 @@ public final class HostService extends Service {
 
     private boolean listen(InetAddress ip, String connectionDetails) {
         try {
-            proxy = new SocksProxy(ip, WIFI.equals(mode) || LAN.equals(mode), boundNetwork, proxyPassword);
+            proxy = new SocksProxy(ip, WIFI.equals(mode) || LAN.equals(mode), boundNetwork, proxyPassword, stats);
             endpoint = ip.getHostAddress() + ":" + SocksProxy.PORT;
+            diagnosticEndpoint = endpoint;
+            stats.note("SOCKS5 listener ready");
             details = connectionDetails + "\nSOCKS5   " + endpoint;
             status = "Sharing";
             return true;
@@ -358,6 +368,7 @@ public final class HostService extends Service {
     }
 
     private void fail(String message) {
+        stats.note(message);
         active = false;
         status = message;
         details = "";
@@ -372,6 +383,7 @@ public final class HostService extends Service {
 
     @Override public void onDestroy() {
         boolean running = active;
+        if (running) stats.note("Sharing stopped");
         active = false;
         mode = null;
         proxyPassword = "";

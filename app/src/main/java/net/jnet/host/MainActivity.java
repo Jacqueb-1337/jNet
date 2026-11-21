@@ -19,6 +19,8 @@ public final class MainActivity extends Activity {
     private Spinner wifiBand;
     private EditText proxyPassword;
     private CheckBox mobileOnly;
+    private TextView activitySummary;
+    private TrafficHistory traffic;
     private static final int INK = 0xfff1f0df, MUTED = 0xffb5b8ab, ACCENT = 0xffd4ec7d;
 
     @Override public void onCreate(Bundle state) {
@@ -58,6 +60,16 @@ public final class MainActivity extends Activity {
             getSystemService(android.content.ClipboardManager.class).setPrimaryClip(
                 android.content.ClipData.newPlainText("jNet proxy address", HostService.endpoint));
         });
+        add(content, label("Traffic", 20, INK), 24);
+        traffic = new TrafficHistory(this);
+        var chart = new LinearLayout.LayoutParams(-1, dp(68));
+        chart.topMargin = dp(8);
+        content.addView(traffic, chart);
+        activitySummary = label("", 15, INK);
+        add(content, activitySummary, 8);
+        var diagnostics = button("Share diagnostics");
+        add(content, diagnostics, 8);
+        diagnostics.setOnClickListener(view -> shareDiagnostics());
         setupQr = button("Show setup QR");
         setupQr.setVisibility(View.GONE);
         add(content, setupQr, 8);
@@ -162,6 +174,10 @@ public final class MainActivity extends Activity {
                 summary += "\nProxy login   jnet";
             }
             if (!summary.contentEquals(details.getText())) details.setText(summary);
+            var stats = HostService.stats;
+            traffic.sample(stats);
+            String activity = traffic.rates() + "\n" + activitySummary(stats);
+            if (!activity.contentEquals(activitySummary.getText())) activitySummary.setText(activity);
             details.setVisibility(HostService.details.isEmpty() ? View.GONE : View.VISIBLE);
             copyEndpoint.setVisibility(HostService.endpoint.isEmpty() ? View.GONE : View.VISIBLE);
             setupQr.setVisibility(hasScannableEndpoint() ? View.VISIBLE : View.GONE);
@@ -176,6 +192,106 @@ public final class MainActivity extends Activity {
             handler.postDelayed(this, 300);
         }
     };
+
+    private String activitySummary(SessionStats stats) {
+        long last = stats.lastUdp.get();
+        String udp = last == 0 ? "none this session" :
+            java.time.Instant.ofEpochMilli(last).atZone(java.time.ZoneId.systemDefault())
+                .toLocalTime().withNano(0).toString();
+        return android.text.format.Formatter.formatShortFileSize(this, stats.sent.get()) + " sent · "
+            + android.text.format.Formatter.formatShortFileSize(this, stats.received.get()) + " received"
+            + "\n" + stats.active.get() + " active · " + stats.accepted.get() + " total · "
+            + stats.devices() + " client addresses\nLast UDP relay: " + udp;
+    }
+
+    private void shareDiagnostics() {
+        var stats = HostService.stats;
+        String report = "jNet diagnostics\nMode: " + HostService.diagnosticMode
+            + "\nStatus: " + HostService.status + "\nProxy: "
+            + (HostService.diagnosticEndpoint.isEmpty() ? "none" : HostService.diagnosticEndpoint)
+            + "\nUpstream: " + (HostService.upstreamStatus.isEmpty() ? "unknown" : HostService.upstreamStatus)
+            + "\n" + activitySummary(stats) + "\n\nRecent events\n" + stats.log();
+        var share = new Intent(Intent.ACTION_SEND).setType("text/plain")
+            .putExtra(Intent.EXTRA_TEXT, report);
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Review diagnostics")
+            .setMessage(report)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Share", (dialog, which) ->
+                startActivity(Intent.createChooser(share, "Share jNet diagnostics")))
+            .show();
+    }
+
+    private static final class TrafficHistory extends View {
+        private final float[] sent = new float[48], received = new float[48];
+        private final android.graphics.Paint paint = new android.graphics.Paint(3);
+        private SessionStats previous;
+        private long at, tx, rx;
+        private float txRate, rxRate, txPeak, rxPeak;
+
+        TrafficHistory(android.content.Context context) {
+            super(context);
+            setContentDescription("Recent traffic graph. Lime is sent, blue is received.");
+        }
+
+        void sample(SessionStats current) {
+            long now = SystemClock.elapsedRealtime();
+            long s = current.sent.get(), r = current.received.get();
+            if (previous != current) {
+                java.util.Arrays.fill(sent, 0);
+                java.util.Arrays.fill(received, 0);
+                previous = current;
+                txRate = rxRate = txPeak = rxPeak = 0;
+            } else {
+                if (now - at < 1000) return;
+                float seconds = (now - at) / 1000f;
+                txRate = (s - tx) / seconds;
+                rxRate = (r - rx) / seconds;
+                txPeak = Math.max(txPeak, txRate);
+                rxPeak = Math.max(rxPeak, rxRate);
+                append(sent, txRate);
+                append(received, rxRate);
+            }
+            at = now;
+            tx = s;
+            rx = r;
+            invalidate();
+        }
+
+        String rates() {
+            return "Sent " + rate(txRate) + " · peak " + rate(txPeak)
+                + "\nReceived " + rate(rxRate) + " · peak " + rate(rxPeak);
+        }
+
+        private String rate(float bytesPerSecond) {
+            return android.text.format.Formatter.formatShortFileSize(getContext(), (long) bytesPerSecond) + "/s";
+        }
+
+        private void append(float[] series, float value) {
+            System.arraycopy(series, 1, series, 0, series.length - 1);
+            series[series.length - 1] = value;
+        }
+
+        @Override protected void onDraw(android.graphics.Canvas canvas) {
+            super.onDraw(canvas);
+            canvas.drawColor(0xff242b25);
+            float max = 1;
+            for (int i = 0; i < sent.length; i++) max = Math.max(max, Math.max(sent[i], received[i]));
+            paint.setStrokeWidth(3);
+            drawSeries(canvas, sent, max, ACCENT);
+            drawSeries(canvas, received, max, 0xff8ad0f0);
+        }
+
+        private void drawSeries(android.graphics.Canvas canvas, float[] series, float max, int color) {
+            paint.setColor(color);
+            float dx = (getWidth() - 8f) / (series.length - 1);
+            float height = getHeight() - 8f;
+            for (int i = 1; i < series.length; i++) {
+                canvas.drawLine(4 + (i - 1) * dx, 4 + height * (1 - series[i - 1] / max),
+                    4 + i * dx, 4 + height * (1 - series[i] / max), paint);
+            }
+        }
+    }
 
     private boolean hasScannableEndpoint() {
         return !HostService.endpoint.isEmpty() && !HostService.endpoint.startsWith("127.0.0.1:");

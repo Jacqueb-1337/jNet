@@ -13,14 +13,16 @@ final class SocksProxy implements Closeable {
     private final boolean udpEnabled;
     private final Network upstreamNetwork;
     private final byte[] password;
+    private final SessionStats stats;
     private final ExecutorService workers = Executors.newFixedThreadPool(64);
     private final Semaphore capacity = new Semaphore(32);
     private final Set<Socket> sockets = ConcurrentHashMap.newKeySet();
 
-    SocksProxy(InetAddress address, boolean udpEnabled, Network upstreamNetwork, String password) throws IOException {
+    SocksProxy(InetAddress address, boolean udpEnabled, Network upstreamNetwork, String password, SessionStats stats) throws IOException {
         this.udpEnabled = udpEnabled;
         this.upstreamNetwork = upstreamNetwork;
         this.password = password.getBytes(StandardCharsets.UTF_8);
+        this.stats = stats;
         server = new ServerSocket();
         try {
             server.bind(new InetSocketAddress(address, PORT));
@@ -36,6 +38,7 @@ final class SocksProxy implements Closeable {
             try {
                 Socket client = server.accept();
                 if (!capacity.tryAcquire()) {
+                    stats.note("Connection limit reached");
                     client.close();
                     continue;
                 }
@@ -54,6 +57,8 @@ final class SocksProxy implements Closeable {
     }
 
     private void serve(Socket client) {
+        stats.accept(client.getInetAddress().getHostAddress());
+        stats.active.incrementAndGet();
         try (client; Socket upstream = new Socket()) {
             sockets.add(upstream);
             try {
@@ -67,6 +72,7 @@ final class SocksProxy implements Closeable {
                 boolean offered = false;
                 for (int i = 0; i < count; i++) offered |= input.readUnsignedByte() == method;
                 output.write(new byte[]{5, (byte) (offered ? method : 255)});
+                if (!offered) stats.note("No compatible SOCKS5 authentication method");
                 if (!offered || (method == 2 && !authenticate(input, output)) ||
                     input.readUnsignedByte() != 5) return;
                 int command = input.readUnsignedByte();
@@ -90,9 +96,9 @@ final class SocksProxy implements Closeable {
                 }
                 reply(output, 0);
                 client.setSoTimeout(0);
-                FutureTask<Void> send = new FutureTask<>(() -> { pipe(client, upstream); return null; });
+                FutureTask<Void> send = new FutureTask<>(() -> { pipe(client, upstream, stats.sent); return null; });
                 new Thread(send, "SOCKS upstream").start();
-                pipe(upstream, client);
+                pipe(upstream, client, stats.received);
                 send.get();
             } finally {
                 sockets.remove(upstream);
@@ -101,6 +107,7 @@ final class SocksProxy implements Closeable {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } finally {
+            stats.active.decrementAndGet();
             sockets.remove(client);
             capacity.release();
         }
@@ -113,6 +120,7 @@ final class SocksProxy implements Closeable {
         boolean accepted = java.security.MessageDigest.isEqual(username, new byte[]{'j','n','e','t'})
             & java.security.MessageDigest.isEqual(supplied, password);
         output.write(new byte[]{1, (byte) (accepted ? 0 : 1)});
+        if (!accepted) stats.note("SOCKS5 login rejected");
         return accepted;
     }
 
@@ -165,6 +173,8 @@ final class SocksProxy implements Closeable {
                         peers.put(destination, now);
                         byte[] payload = input.readAllBytes();
                         upstream.send(new DatagramPacket(payload, payload.length, destination));
+                        stats.sent.addAndGet(payload.length);
+                        stats.lastUdp.set(System.currentTimeMillis());
                     } catch (IOException ignored) {}
                 }
             }, "SOCKS UDP client");
@@ -186,6 +196,8 @@ final class SocksProxy implements Closeable {
                         output.write(buffer, 0, packet.getLength());
                         byte[] payload = encoded.toByteArray();
                         relay.send(new DatagramPacket(payload, payload.length, target));
+                        stats.received.addAndGet(packet.getLength());
+                        stats.lastUdp.set(System.currentTimeMillis());
                     } catch (IOException ignored) {}
                 }
             }, "SOCKS UDP replies");
@@ -209,12 +221,20 @@ final class SocksProxy implements Closeable {
         input.readFully(bytes);
         return bytes;
     }
-    private static void reply(OutputStream output, int status) throws IOException {
+    private void reply(OutputStream output, int status) throws IOException {
+        if (status != 0) stats.note("SOCKS5 request failed (code " + status + ")");
         output.write(new byte[]{5, (byte) status, 0, 1, 0, 0, 0, 0, 0, 0});
     }
-    private static void pipe(Socket source, Socket destination) {
+    private static void pipe(Socket source, Socket destination, java.util.concurrent.atomic.AtomicLong bytes) {
         try {
-            source.getInputStream().transferTo(destination.getOutputStream());
+            var input = source.getInputStream();
+            var output = destination.getOutputStream();
+            byte[] buffer = new byte[16384];
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                output.write(buffer, 0, count);
+                bytes.addAndGet(count);
+            }
             destination.shutdownOutput();
         } catch (IOException e) {
             quietClose(source);
