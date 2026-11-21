@@ -74,6 +74,24 @@ public final class MainActivity extends Activity {
         var activityPanel = panel();
         add(activityPanel, label("Session traffic", 18, INK), 0);
         traffic = new TrafficHistory(this);
+        var units = new RadioGroup(this);
+        units.setOrientation(LinearLayout.HORIZONTAL);
+        var preferences = getPreferences(MODE_PRIVATE);
+        traffic.megabits = preferences.getBoolean("trafficMegabits", false);
+        for (String unit : new String[]{"MB/s", "Mbps"}) {
+            var choice = new RadioButton(this);
+            choice.setId(View.generateViewId());
+            choice.setText(unit);
+            choice.setMinHeight(dp(48));
+            units.addView(choice);
+            boolean bits = unit.equals("Mbps");
+            choice.setChecked(bits == traffic.megabits);
+            choice.setOnClickListener(v -> {
+                traffic.megabits = bits;
+                preferences.edit().putBoolean("trafficMegabits", bits).apply();
+            });
+        }
+        add(activityPanel, units, 0);
         var chart = new LinearLayout.LayoutParams(-1, dp(68));
         chart.topMargin = dp(8);
         activityPanel.addView(traffic, chart);
@@ -333,13 +351,14 @@ public final class MainActivity extends Activity {
     private static final class TrafficHistory extends View {
         private final float[] sent = new float[48], received = new float[48];
         private final android.graphics.Paint paint = new android.graphics.Paint(3);
+        private boolean megabits;
         private SessionStats previous;
         private long at, tx, rx;
         private float txRate, rxRate, txPeak, rxPeak;
 
         TrafficHistory(android.content.Context context) {
             super(context);
-            setContentDescription("Recent traffic graph. Lime is sent, blue is received.");
+            setContentDescription("Recent traffic graph. Sent rises above zero in red-orange. Received falls below zero in green.");
         }
 
         void sample(SessionStats current) {
@@ -367,12 +386,15 @@ public final class MainActivity extends Activity {
         }
 
         String rates() {
-            return "Sent " + rate(txRate) + " · peak " + rate(txPeak)
-                + "\nReceived " + rate(rxRate) + " · peak " + rate(rxPeak);
+            return "↑ Sent " + rate(txRate) + " · peak " + rate(txPeak)
+                + "\n↓ Received " + rate(rxRate) + " · peak " + rate(rxPeak);
         }
 
         private String rate(float bytesPerSecond) {
-            return android.text.format.Formatter.formatShortFileSize(getContext(), (long) bytesPerSecond) + "/s";
+            double value = bytesPerSecond * (megabits ? 8.0 : 1.0) / 1_000_000;
+            String unit = megabits ? " Mbps" : " MB/s";
+            if (value > 0 && value < 0.01) return "<0.01" + unit;
+            return String.format(java.util.Locale.getDefault(), "%.2f", value) + unit;
         }
 
         private void append(float[] series, float value) {
@@ -386,17 +408,21 @@ public final class MainActivity extends Activity {
             float max = 1;
             for (int i = 0; i < sent.length; i++) max = Math.max(max, Math.max(sent[i], received[i]));
             paint.setStrokeWidth(3);
-            drawSeries(canvas, sent, max, ACCENT);
-            drawSeries(canvas, received, max, 0xff8ad0f0);
+            float zero = getHeight() / 2f;
+            paint.setColor(0xff626d70);
+            canvas.drawLine(4, zero, getWidth() - 4, zero, paint);
+            float scale = (zero - 4) / max;
+            drawSeries(canvas, sent, zero, -scale, 0xffff805f);
+            drawSeries(canvas, received, zero, scale, 0xff66d991);
         }
 
-        private void drawSeries(android.graphics.Canvas canvas, float[] series, float max, int color) {
+        private void drawSeries(android.graphics.Canvas canvas, float[] series, float zero, float scale, int color) {
             paint.setColor(color);
             float dx = (getWidth() - 8f) / (series.length - 1);
-            float height = getHeight() - 8f;
             for (int i = 1; i < series.length; i++) {
-                canvas.drawLine(4 + (i - 1) * dx, 4 + height * (1 - series[i - 1] / max),
-                    4 + i * dx, 4 + height * (1 - series[i] / max), paint);
+                if (series[i - 1] == 0 && series[i] == 0) continue;
+                canvas.drawLine(4 + (i - 1) * dx, zero + scale * series[i - 1],
+                    4 + i * dx, zero + scale * series[i], paint);
             }
         }
     }
