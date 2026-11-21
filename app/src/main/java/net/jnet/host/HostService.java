@@ -32,6 +32,16 @@ public final class HostService extends Service {
     private int attempts;
     private int wifiBand;
     static int bandIndex(int band) { return band == 1 || band == 2 ? band : 0; }
+    static String wifiPassword(Context context) {
+        var preferences = context.getSharedPreferences("host", MODE_PRIVATE);
+        String password = preferences.getString("password", null);
+        if (password == null) {
+            password = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+            preferences.edit().putString("password", password).apply();
+        }
+        return password;
+    }
+
     static boolean validWifiPassword(String password) { return password.matches("[ -~]{8,63}"); }
     private String vpnOverride;
     private boolean mobileOnly;
@@ -213,12 +223,7 @@ public final class HostService extends Service {
         }
         if (channel == null) { retry("Waiting for Wi-Fi Direct…"); return; }
         if (ownsGroup) { readWifi(); return; }
-        var preferences = getSharedPreferences("host", MODE_PRIVATE);
-        String password = preferences.getString("password", null);
-        if (password == null) {
-            password = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-            preferences.edit().putString("password", password).apply();
-        }
+        String password = wifiPassword(this);
         int band = switch (wifiBand) {
             case 1 -> WifiP2pConfig.GROUP_OWNER_BAND_2GHZ;
             case 2 -> WifiP2pConfig.GROUP_OWNER_BAND_5GHZ;

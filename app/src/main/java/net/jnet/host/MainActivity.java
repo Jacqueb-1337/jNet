@@ -232,12 +232,29 @@ public final class MainActivity extends Activity {
         var prefs = getSharedPreferences("host", MODE_PRIVATE);
         add(body, label("Network name", 14, MUTED), 0);
         add(body, label("DIRECT-JN-jNet", 18, INK), 2);
-        add(body, label("New password", 14, MUTED), 12);
+        add(body, label("Password", 14, MUTED), 12);
         var password = new EditText(this);
         password.setSingleLine(true);
-        password.setInputType(129);
-        password.setHint("Leave blank to keep current");
-        add(body, password, 0);
+        password.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
+            android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        password.setText(HostService.wifiPassword(this));
+        var field = new LinearLayout(this);
+        field.setGravity(Gravity.CENTER_VERTICAL);
+        field.addView(password, new LinearLayout.LayoutParams(0, -2, 1));
+        var eye = new ImageButton(this, null, android.R.attr.borderlessButtonStyle);
+        eye.setImageResource(R.drawable.show_password);
+        eye.setContentDescription("Show password");
+        field.addView(eye, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        eye.setOnClickListener(v -> {
+            boolean reveal = password.getTransformationMethod() != null;
+            int start = password.getSelectionStart(), end = password.getSelectionEnd();
+            password.setTransformationMethod(reveal ? null :
+                android.text.method.PasswordTransformationMethod.getInstance());
+            if (start >= 0 && end >= 0) password.setSelection(start, end);
+            eye.setImageResource(reveal ? R.drawable.hide_password : R.drawable.show_password);
+            eye.setContentDescription(reveal ? "Hide password" : "Show password");
+        });
+        add(body, field, 0);
         add(body, label("Band", 14, MUTED), 10);
         var band = new Spinner(this);
         var adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
@@ -250,11 +267,11 @@ public final class MainActivity extends Activity {
             .setView(body).setNegativeButton("Cancel", null).setPositiveButton("Save", null).show();
         dialog.getButton(-1).setOnClickListener(v -> {
             String value = password.getText().toString();
-            if (!value.isEmpty() && !HostService.validWifiPassword(value)) {
+            if (!HostService.validWifiPassword(value)) {
                 password.setError("Use 8–63 printable ASCII characters");
                 return;
             }
-            if (!value.isEmpty()) prefs.edit().putString("password", value).apply();
+            prefs.edit().putString("password", value).apply();
             getPreferences(MODE_PRIVATE).edit().putInt("wifiBand", band.getSelectedItemPosition()).apply();
             dialog.dismiss();
         });
