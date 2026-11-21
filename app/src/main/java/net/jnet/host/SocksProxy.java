@@ -9,11 +9,13 @@ import java.util.concurrent.*;
 final class SocksProxy implements Closeable {
     static final int PORT = 1080;
     private final ServerSocket server;
+    private final boolean udpEnabled;
     private final ExecutorService workers = Executors.newFixedThreadPool(64);
     private final Semaphore capacity = new Semaphore(32);
     private final Set<Socket> sockets = ConcurrentHashMap.newKeySet();
 
-    SocksProxy(InetAddress address) throws IOException {
+    SocksProxy(InetAddress address, boolean udpEnabled) throws IOException {
+        this.udpEnabled = udpEnabled;
         server = new ServerSocket();
         try {
             server.bind(new InetSocketAddress(address, PORT));
@@ -62,16 +64,15 @@ final class SocksProxy implements Closeable {
                 if (!noAuth || input.readUnsignedByte() != 5) return;
                 int command = input.readUnsignedByte();
                 if (input.readUnsignedByte() != 0) return;
-                if (command != 1) { reply(output, 7); return; }
-                int type = input.readUnsignedByte();
-                String host;
-                switch (type) {
-                    case 1: host = InetAddress.getByAddress(read(input, 4)).getHostAddress(); break;
-                    case 4: host = InetAddress.getByAddress(read(input, 16)).getHostAddress(); break;
-                    case 3: host = new String(read(input, input.readUnsignedByte()), StandardCharsets.US_ASCII); break;
-                    default: reply(output, 8); return;
-                }
+                if (command != 1 && command != 3) { reply(output, 7); return; }
+                String host = readHost(input);
+                if (host == null) { reply(output, 8); return; }
                 int port = input.readUnsignedShort();
+                if (command == 3) {
+                    if (!udpEnabled) reply(output, 7);
+                    else relayUdp(client, port);
+                    return;
+                }
                 if (host.isBlank() || port == 0) { reply(output, 1); return; }
                 try {
                     upstream.connect(new InetSocketAddress(host, port), 10000);
@@ -95,6 +96,88 @@ final class SocksProxy implements Closeable {
             sockets.remove(client);
             capacity.release();
         }
+    }
+
+    private static String readHost(DataInputStream input) throws IOException {
+        return switch (input.readUnsignedByte()) {
+            case 1 -> InetAddress.getByAddress(read(input, 4)).getHostAddress();
+            case 4 -> InetAddress.getByAddress(read(input, 16)).getHostAddress();
+            case 3 -> new String(read(input, input.readUnsignedByte()), StandardCharsets.US_ASCII);
+            default -> null;
+        };
+    }
+
+    private void relayUdp(Socket control, int requestedPort) throws IOException {
+        try (var relay = new DatagramSocket(new InetSocketAddress(control.getLocalAddress(), 0));
+             var upstream = new DatagramSocket()) {
+            var header = new DataOutputStream(control.getOutputStream());
+            header.write(new byte[]{5, 0, 0});
+            writeAddress(header, relay.getLocalAddress(), relay.getLocalPort());
+            control.setSoTimeout(0);
+            var peers = new ConcurrentHashMap<InetSocketAddress, Long>();
+            var client = new java.util.concurrent.atomic.AtomicReference<InetSocketAddress>();
+            var listener = new Thread(() -> {
+                byte[] buffer = new byte[65535];
+                var packet = new DatagramPacket(buffer, buffer.length);
+                while (!relay.isClosed()) {
+                    try {
+                        packet.setLength(buffer.length);
+                        relay.receive(packet);
+                        if (!packet.getAddress().equals(control.getInetAddress())) continue;
+                        if (requestedPort != 0 && packet.getPort() != requestedPort) continue;
+                        var sender = (InetSocketAddress) packet.getSocketAddress();
+                        var input = new DataInputStream(new ByteArrayInputStream(buffer, 0, packet.getLength()));
+                        if (input.readUnsignedShort() != 0 || input.readUnsignedByte() != 0) continue;
+                        String host = readHost(input);
+                        int port = input.readUnsignedShort();
+                        if (host == null || host.isBlank() || port == 0) continue;
+                        client.compareAndSet(null, sender);
+                        if (!sender.equals(client.get())) continue;
+                        var destination = new InetSocketAddress(host, port);
+                        if (destination.isUnresolved()) continue;
+                        long now = System.nanoTime();
+                        peers.entrySet().removeIf(entry -> now - entry.getValue() > TimeUnit.MINUTES.toNanos(2));
+                        if (peers.size() >= 128 && !peers.containsKey(destination)) continue;
+                        peers.put(destination, now);
+                        byte[] payload = input.readAllBytes();
+                        upstream.send(new DatagramPacket(payload, payload.length, destination));
+                    } catch (IOException ignored) {}
+                }
+            }, "SOCKS UDP client");
+            var receiver = new Thread(() -> {
+                byte[] buffer = new byte[65535];
+                var packet = new DatagramPacket(buffer, buffer.length);
+                while (!upstream.isClosed()) {
+                    try {
+                        packet.setLength(buffer.length);
+                        upstream.receive(packet);
+                        Long sent = peers.get(packet.getSocketAddress());
+                        var target = client.get();
+                        if (target == null || sent == null ||
+                            System.nanoTime() - sent > TimeUnit.MINUTES.toNanos(2)) continue;
+                        var encoded = new ByteArrayOutputStream();
+                        var output = new DataOutputStream(encoded);
+                        output.write(new byte[]{0, 0, 0});
+                        writeAddress(output, packet.getAddress(), packet.getPort());
+                        output.write(buffer, 0, packet.getLength());
+                        byte[] payload = encoded.toByteArray();
+                        relay.send(new DatagramPacket(payload, payload.length, target));
+                    } catch (IOException ignored) {}
+                }
+            }, "SOCKS UDP replies");
+            listener.start();
+            receiver.start();
+            while (control.getInputStream().read() != -1) {
+                // The association lives as long as its TCP control connection.
+            }
+        }
+    }
+
+    private static void writeAddress(DataOutputStream output, InetAddress address, int port) throws IOException {
+        byte[] bytes = address.getAddress();
+        output.writeByte(bytes.length == 4 ? 1 : 4);
+        output.write(bytes);
+        output.writeShort(port);
     }
 
     private static byte[] read(DataInputStream input, int count) throws IOException {

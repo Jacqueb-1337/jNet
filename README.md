@@ -18,7 +18,7 @@ Use `curl.exe` in Windows PowerShell if `curl` resolves to an alias.
 
 For USB, install Android Platform Tools on Windows or Linux, enable USB debugging on the phone, and approve the computer when Android prompts. Start the USB proxy in jNet, then run `adb -d forward tcp:1080 tcp:1080`. Configure your SOCKS client for `127.0.0.1:1080`. To detach the forwarding rule, use `adb -d forward --remove tcp:1080`. This is jNet's own SOCKS transport and requires no PdaNet desktop software.
 
-SOCKS supports TCP CONNECT. UDP and system-wide routing are outside this preview. A Tailscale exit node is the separate feature for routing the entire PC through an approved device. SOCKS does not enroll the computer in Tailscale or in the phone's other VPN.
+SOCKS supports TCP CONNECT in every mode. Wi-Fi Direct also supports UDP ASSOCIATE for clients that enable it. The client must keep its TCP association open and send unfragmented SOCKS datagrams. USB and Tailscale modes remain TCP-only. A Tailscale exit node is a separate feature for routing the entire PC through an approved device.
 
 ## Build and release
 

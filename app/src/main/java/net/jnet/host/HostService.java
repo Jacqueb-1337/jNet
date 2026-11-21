@@ -125,7 +125,7 @@ public final class HostService extends Service {
             fail("Connect Tailscale and enter the IPv4 address assigned to this phone.");
             return;
         }
-        localProxy = new SocksProxy(InetAddress.getByName("127.0.0.1"));
+        localProxy = new SocksProxy(InetAddress.getByName("127.0.0.1"), false);
         listen(ip, "Tailnet only");
         if (proxy != null) handler.postDelayed(() -> checkVpn(ip), 2000);
     }
@@ -142,7 +142,7 @@ public final class HostService extends Service {
 
     private void listen(InetAddress ip, String connectionDetails) {
         try {
-            proxy = new SocksProxy(ip);
+            proxy = new SocksProxy(ip, WIFI.equals(mode));
             endpoint = ip.getHostAddress() + ":" + SocksProxy.PORT;
             details = connectionDetails + "\nSOCKS5   " + endpoint;
             status = "Sharing";

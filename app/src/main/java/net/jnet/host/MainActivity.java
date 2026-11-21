@@ -63,7 +63,7 @@ public final class MainActivity extends Activity {
                 + "Windows · Proxifier (paid)\nLinux · ProxyChains-NG (run apps through it)\n\n"
                 + "Add a SOCKS5 proxy in the client and enter the address and port shown in jNet. "
                 + "Use remote DNS if your client offers it.\n\n"
-                + "jNet forwards TCP. Apps that require UDP, including some games and calls, may not work.")
+                + "Wi-Fi Direct supports TCP and UDP. USB and Tailscale are supported for TCP.")
             .setPositiveButton("Done", null)
             .show());
 
