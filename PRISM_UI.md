@@ -85,3 +85,32 @@ Puppeteer Android-user-agent, 392px and 350px layouts:
 
 The actual Android device needs verification for GPU refraction,
 hotspot lifecycle, credentials, and system insets before claiming full parity.
+## Refractive scroll-under header (v0.1.32)
+
+The fixed header now overlays the scrolling page. The main scroller fills the
+native-inset WebView viewport, retaining the same 75px starting top padding.
+Cards really scroll behind the header instead of hitting a hard boundary.
+
+A separate #headerGlass uses the existing SVG feDisplacementMap compositor,
+with a vertical optical meniscus that bends content passing the header edge
+and returns smoothly to zero displacement before the lower boundary. It keeps
+the corrected sRGB-to-linear displacement-map encoding from v0.1.31.
+
+A separate, non-refractive #headerShade provides a dark-to-transparent fade.
+We deliberately don't apply CSS mask-image to the refractive element because
+Chromium's backdrop-filter and CSS masking can interfere with compositing.
+The shade is a sibling layer, not a nested backdrop-filter root.
+
+Scroll progress controls only both layers' opacity, from 0 at the top to 1
+after 55px. The displacement map is built on load/resize only, never per scroll
+frame. Header text and settings controls render above both layers. Android
+status/navigation insets, glass dock, Wi-Fi state, and per-tab scroll restoration
+are otherwise unchanged.
+
+QA: Chromium Android-WebView user-agent, 392x850 and 350x850 viewport tests,
+tested at 0, 15, 55, 100 and 160px scroll: backdrop-filter SVG URL registered,
+header material's displacement texture has neutral edges and displaced center,
+fade opacity interpolates, long Activity content passes under the fixed
+header, settings button remains clickable, and no JS exceptions. Screenshots
+reviewed. Final Android device appearance still requires acceptance testing.
+

@@ -4,13 +4,20 @@ html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--bg);c
 button,input,select{font:inherit}button{cursor:pointer;touch-action:manipulation}button:disabled{opacity:.45;cursor:not-allowed}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 #app{position:relative;height:100%;width:100%;max-width:660px;margin:auto;overflow:hidden;background:radial-gradient(circle at 78% 5%,rgba(43,64,112,.12),transparent 30%),radial-gradient(circle at 10% 78%,rgba(41,40,78,.09),transparent 34%),var(--bg)}
-#header{height:75px;padding:14px 18px 12px;display:flex;align-items:center;justify-content:space-between}
+#header{position:absolute;z-index:30;top:0;left:0;right:0;height:75px;padding:14px 18px 12px;display:flex;align-items:center;justify-content:space-between;pointer-events:none}
+#header .circle-action{pointer-events:auto}
 #headerTitle{font-size:30px;line-height:1.1;font-weight:750;letter-spacing:-1.2px;margin:0}
 #screenTitle{margin:0;font-size:29px;font-weight:730;letter-spacing:-1.1px}
 .circle-action{width:44px;height:44px;background:linear-gradient(156deg,#3a3a3f,#262629);border:1px solid rgba(255,255,255,.11);color:white;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 1px rgba(255,255,255,.09)}
 .icon{height:21px;width:21px;display:inline-block;vertical-align:middle;flex:none}
 .icon svg{display:block;width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-#pageScroller{height:calc(100% - 75px);overflow:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:0 15px 125px;overscroll-behavior:contain;scrollbar-width:none}
+/* Cards pass behind the fixed header; the initial top spacing remains. */
+#pageScroller{position:absolute;inset:0;height:100%;overflow:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:75px 15px 125px;overscroll-behavior:contain;scrollbar-width:none}
+#headerGlass{position:absolute;z-index:18;left:0;right:0;top:0;height:124px;pointer-events:none;opacity:0;visibility:hidden;
+  background:rgba(28,31,40,.025);will-change:opacity}
+#headerShade{position:absolute;z-index:19;left:0;right:0;top:0;height:124px;pointer-events:none;opacity:0;visibility:hidden;
+  background:linear-gradient(180deg,#121216 0%,#121216 43%,rgba(18,18,22,.95) 65%,transparent 100%);
+  will-change:opacity}
 #pageScroller::-webkit-scrollbar,.sheet-scroll::-webkit-scrollbar{display:none}
 .page{display:none;min-height:200px;transform:translate3d(0,0,0)}.page.active{display:block}
 .section-title{font-size:20px;letter-spacing:-.45px;font-weight:750;margin:14px 2px 12px}
