@@ -1,4 +1,4 @@
-﻿package net.jnet.host;
+package net.jnet.host;
 
 import android.Manifest;
 import android.app.Activity;

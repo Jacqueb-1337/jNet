@@ -1,4 +1,4 @@
-﻿# jNet Prism UI implementation
+# jNet Prism UI implementation
 
 The launch screen now uses a Chromium WebView with the user's Prism JS v3 motion and SVG-refraction prototype, adapted to jNet's live Android app.
 

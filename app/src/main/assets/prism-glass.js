@@ -1,4 +1,4 @@
-﻿
+
 /* Prism JS refractive surfaces. Source: prism_ui liquid_glass.dart, liquid_glass.frag
  * This path renders a real, live, browser-composited BACKDROP using SVG feDisplacementMap.
  * No DOM screenshots or stale textures. Chromium implementation; other engines use native

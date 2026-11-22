@@ -1,4 +1,4 @@
-﻿package net.jnet.host;
+package net.jnet.host;
 
 import android.app.*;
 import android.content.*;

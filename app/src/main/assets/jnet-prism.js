@@ -1,4 +1,4 @@
-﻿/* jNet Prism UI: live Android HostService state, not simulated network data. */
+/* jNet Prism UI: live Android HostService state, not simulated network data. */
 (() => {
 'use strict';
 const $ = id => document.getElementById(id);

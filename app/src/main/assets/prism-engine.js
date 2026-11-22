@@ -1,4 +1,4 @@
-﻿
+
 /* Prism JS: independent browser implementation of the motion primitives used by
    chen08209/prism_ui, pinned by FlClash main at 6c47901cc80b5325bdb9650579ca2e000a60b39e.
    This is a behavioral port, not a copy of Dart or an embedded Flutter runtime.
