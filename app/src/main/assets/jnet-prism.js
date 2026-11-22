@@ -15,6 +15,23 @@ const uploadSamples = Array(48).fill(0), downloadSamples = Array(48).fill(0);
 let toastTimer, requestedTimer;
 const navItems = [...document.querySelectorAll('[data-tab]')];
 const navLens = $('dockLens'), panel = $('sheetPanel'), sheetLayer = $('sheetLayer'), sheetScroll = $('sheetScroll');
+const pageScroller = $('pageScroller'), headerGlass = $('headerGlass'), headerShade = $('headerShade');
+let headerFrame = 0;
+function syncHeaderRefraction() {
+  const amount = Math.max(0,Math.min(1,pageScroller.scrollTop/55));
+  const visibility = amount > 0.001 ? 'visible' : 'hidden';
+  headerGlass.style.opacity = String(amount);
+  headerGlass.style.visibility = visibility;
+  headerShade.style.opacity = String(amount);
+  headerShade.style.visibility = visibility;
+}
+pageScroller.addEventListener('scroll',()=>{
+  if(headerFrame)return;
+  headerFrame = requestAnimationFrame(()=>{
+    headerFrame = 0;
+    syncHeaderRefraction();
+  });
+},{passive:true});
 const safeNative = (fn,...args) => {
   if(typeof native[fn]==='function') {try {native[fn](...args)} catch(e) {toast('Could not complete action.')} }
   else toast('Preview only');
@@ -124,7 +141,8 @@ function switchTab(tab) {
   } else {page.style.opacity='';page.style.transform=''}
   navItems.forEach(el=>{const active=el.dataset.tab===screen;el.classList.toggle('active',active);active?el.setAttribute('aria-current','page'):el.removeAttribute('aria-current')});
   $('headerTitle').textContent=screen==='dashboard'?'jNet':screen.charAt(0).toUpperCase()+screen.slice(1);
-  $('pageScroller').scrollTop=scrollPositions[screen] || 0;
+  pageScroller.scrollTop=scrollPositions[screen] || 0;
+  syncHeaderRefraction();
   if (!QA) safeNative('tab', screen);
   setLens(navItems.findIndex(el=>el.dataset.tab===screen));
 }
@@ -287,6 +305,7 @@ for(const el of document.querySelectorAll('.bouncy'))
   if(window.Prism&&Prism.elasticPress)Prism.elasticPress(el,{maxGrowth:7,pullPastEdges:true,hover:false});
 setInterval(()=>{if(state.active)$('sessionTime').textContent=timeText()},1000);
 requestAnimationFrame(()=>lensPosition.jump(0));
+syncHeaderRefraction();
 renderState();
 })();
 

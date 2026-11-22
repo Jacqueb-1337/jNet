@@ -18,7 +18,8 @@ const styles={
   regular:{refraction:60,bevel:20,blur:2.5,haze:0,hazeBlur:0,saturation:2.84,brightness:1,tint:[75,76,83,.62]},
   menu:{refraction:60,bevel:20,blur:12,haze:0,hazeBlur:0,saturation:1.75,brightness:1.8,tint:[70,70,75,.63]},
   lens:{refraction:-4.3,bevel:5.5,blur:0,haze:0,hazeBlur:0,saturation:1,brightness:1.33,tint:[0,0,0,0],dispersion:6.5},
-  tinted:{refraction:60,bevel:20,blur:2.5,haze:0,hazeBlur:0,saturation:1.2,brightness:1,tint:[50,136,247,.82]}
+  tinted:{refraction:60,bevel:20,blur:2.5,haze:0,hazeBlur:0,saturation:1.2,brightness:1,tint:[50,136,247,.82]},
+  header:{refraction:19,bevel:30,blur:0,haze:0,hazeBlur:0,saturation:1.18,brightness:1,tint:[18,19,24,.45]}
 };
 const mix=(a,b,t)=>a+(b-a)*t;
 const smooth=(a,b,x)=>{let t=Math.max(0,Math.min(1,(x-a)/(b-a||1)));return t*t*(3-2*t)};
@@ -49,14 +50,23 @@ function mapImage(w,h,material,channel){
   const c=document.createElement('canvas');c.width=pw;c.height=ph;
   const cx=c.getContext('2d',{willReadFrequently:false}),img=cx.createImageData(pw,ph),data=img.data;
   const radius=Math.min(w,h)*.5, minor=Math.min(w,h)*.5,bevel=Math.max(.001,Math.min(m.bevel,minor*.5));
-  const scale=material==='lens'?18:150;
+  const scale=material==='lens'?18:material==='header'?56:150;
   for(let iy=0;iy<ph;iy++)for(let ix=0;ix<pw;ix++){
     const x=(ix+.5)/pw*w-w*.5,y=(iy+.5)/ph*h-h*.5;
-    const {inset,nx,ny}=shape(x,y,w,h,radius);
-    const rise=1-Math.min(inset/bevel,1);
-    let dx,dy;
-    if(m.refraction<0){const amount=-m.refraction*smooth(0,bevel,inset)*(1-smooth(bevel,minor,inset));dx=nx*amount;dy=ny*amount}
-    else{const amount=Math.min(m.refraction,minor)*(1-Math.sqrt(Math.max(0,1-rise*rise)));dx=-nx*amount;dy=-ny*amount}
+    let dx,dy,inset=0,nx=0,ny=0;
+    if(material==='header'){
+      // Vertical optical meniscus: displace content entering the header,
+      // then return to neutral before the feathered lower edge.
+      const py=(iy+.5)/ph*h,px=(ix+.5)/pw*w;
+      const band=smooth(22,79,py)*(1-smooth(h-40,h-4,py));
+      dx=2.4*Math.sin(px/w*Math.PI*2)*band;
+      dy=-16*band;
+    }else{
+      ({inset,nx,ny}=shape(x,y,w,h,radius));
+      const rise=1-Math.min(inset/bevel,1);
+      if(m.refraction<0){const amount=-m.refraction*smooth(0,bevel,inset)*(1-smooth(bevel,minor,inset));dx=nx*amount;dy=ny*amount}
+      else{const amount=Math.min(m.refraction,minor)*(1-Math.sqrt(Math.max(0,1-rise*rise)));dx=-nx*amount;dy=-ny*amount}
+    }
     if(channel&&inset<10){const split=(m.dispersion||0)*.5*(.6+.4*Math.abs(ny)*Math.max(1-inset/7,0))*(1-smooth(7,10,inset));dx+=(channel==='red'?1:-1)*ny*split;dy+=(channel==='red'?1:-1)*nx*split;}
     const k=(iy*pw+ix)*4;
     data[k]=displacementByte(dx,scale);
@@ -129,7 +139,7 @@ class GlassHost{
   destroy(){this.observer.disconnect();this.nodes.forEach(n=>{cancelAnimationFrame(n.queued);n.filter.remove()});this.nodes.clear();this.root.remove()}
 }
 let glassHost;
-function enable(){if(glassHost)return glassHost;glassHost=new GlassHost();const reg=(sel,type)=>document.querySelectorAll(sel).forEach(el=>glassHost.bind(el,type));reg('#dockGlassBase','pill');reg('#dockLens','lens');reg('.circle-action','regular');reg('.prism-popup-platter','menu');reg('#popupMenu','menu');reg('#sheetPanel','menu');reg('.status-deck .deck-card','menu');const n=document.querySelector('.status-deck');if(!n){new MutationObserver(()=>{reg('.status-deck .deck-card','menu')}).observe(document.body,{childList:true,subtree:false})}
+function enable(){if(glassHost)return glassHost;glassHost=new GlassHost();const reg=(sel,type)=>document.querySelectorAll(sel).forEach(el=>glassHost.bind(el,type));reg('#dockGlassBase','pill');reg('#dockLens','lens');reg('#headerGlass','header');reg('.circle-action','regular');reg('.prism-popup-platter','menu');reg('#popupMenu','menu');reg('#sheetPanel','menu');reg('.status-deck .deck-card','menu');const n=document.querySelector('.status-deck');if(!n){new MutationObserver(()=>{reg('.status-deck .deck-card','menu')}).observe(document.body,{childList:true,subtree:false})}
  return glassHost;}
 window.PrismGlass={init:enable,get host(){return glassHost},styles,shape,mapImage};
 // Wait until DOM and the app are initialized, so source elements already exist.
