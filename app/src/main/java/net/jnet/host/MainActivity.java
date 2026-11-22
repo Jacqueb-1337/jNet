@@ -125,7 +125,7 @@ public final class MainActivity extends Activity {
                 + "Windows, Linux and macOS: enable TUN and approve administrator access if requested.\n"
                 + "Use Rule routing. VPN/TUN must be enabled in FlClash after importing.\n\n"
                 + "Existing alternatives are still available from the setup page:\n"
-                + "Android: NekoBox\nWindows/Linux: v2rayN\n"
+                + "Android: NekoBox\nWindows/Linux: v2rayN\nLinux: ProxyChains-NG (per-app proxy)\n"
                 + "iPhone/iPad: Potatso (FlClash is not available for iOS).\n\n"
                 + "Current Wi-Fi and Wi-Fi Direct support SOCKS5 TCP and UDP. "
                 + "Check jNet's traffic counters after connecting.")
