@@ -313,7 +313,7 @@ public final class HostService extends Service {
             stats.note("SOCKS5 listener ready");
             details = connectionDetails + "\nSOCKS5   " + endpoint;
             try {
-                portal = new SetupPortal(ip.getHostAddress(), boundNetwork, !proxyPassword.isEmpty());
+                portal = new SetupPortal(this, ip.getHostAddress(), boundNetwork, proxyPassword);
                 portal.start();
                 portalUrl = portal.url();
                 details += "\nSetup page   " + portalUrl;
