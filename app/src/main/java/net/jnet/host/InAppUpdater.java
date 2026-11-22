@@ -1,5 +1,6 @@
-package net.jnet.host;
+﻿package net.jnet.host;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
@@ -35,7 +36,7 @@ final class InAppUpdater {
     private static final String PREFS = "app_update";
     private static final String APK_MIME = "application/vnd.android.package-archive";
 
-    private final MainActivity activity;
+    private final Activity activity;
     private final DownloadManager downloads;
     private final SharedPreferences saved;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -54,7 +55,7 @@ final class InAppUpdater {
     private boolean readyDismissed;
     private boolean waitingForInstallPermission;
 
-    InAppUpdater(MainActivity activity) {
+    InAppUpdater(Activity activity) {
         this.activity = activity;
         downloads = (DownloadManager) activity.getSystemService(Context.DOWNLOAD_SERVICE);
         saved = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
