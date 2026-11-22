@@ -34,6 +34,8 @@ public class FlClashProfileTest {
         assertTrue(((List<String>) config.get("rules")).contains("IP-CIDR,192.168.49.1/32,DIRECT,no-resolve"));
         // Enabling VPN/TUN belongs to FlClash/OS, never assumed from a YAML import.
         assertFalse(config.containsKey("tun"));
+        @SuppressWarnings("unchecked") Map<String, Object> dns = (Map<String, Object>) config.get("dns");
+        assertEquals(List.of("https://1.1.1.1/dns-query#jNet", "https://8.8.8.8/dns-query#jNet"), dns.get("nameserver"));
     }
 
     @SuppressWarnings("unchecked")
