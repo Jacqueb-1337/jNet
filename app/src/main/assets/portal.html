@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111b1e">
+  <title>Connect through jNet</title>
+  <style>
+    :root{color-scheme:dark;--bg:#101719;--card:#192427;--field:#233236;--ink:#edf5f4;--muted:#aabcbf;--line:#344549;--accent:#7addc8}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+    main{max-width:690px;margin:auto;padding:23px 18px 45px}
+    header{display:flex;align-items:center;gap:12px;margin-bottom:25px}
+    .mark{display:grid;place-items:center;background:#235248;color:#c8fff0;border-radius:14px;font-size:25px;width:52px;height:52px;font-weight:700}
+    h1{font-size:27px;letter-spacing:-.7px;margin:0}h2{font-size:20px;margin:0 0 7px;letter-spacing:-.3px}
+    p{margin:6px 0 15px}.muted,small{color:var(--muted)}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;margin:14px 0}
+    .eyebrow{text-transform:uppercase;letter-spacing:1px;font-size:11px;color:var(--accent);font-weight:750;margin-bottom:5px}
+    label{font-weight:600;display:block;margin:12px 0 6px}
+    select,input{font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:10px;padding:12px;width:100%;min-height:48px}
+    input:focus,select:focus,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+    .buttons{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+    button,.button{appearance:none;border:1px solid var(--line);border-radius:11px;padding:12px 15px;min-height:46px;display:inline-flex;justify-content:center;align-items:center;gap:6px;font-weight:700;font-size:15px;font-family:inherit;cursor:pointer;text-decoration:none;flex:1}
+    button.primary,.button.primary{background:var(--accent);color:#0a2724;border-color:transparent}
+    button.secondary,.button.secondary{background:#2a3e41;color:var(--ink)}
+    button:disabled{opacity:.55;cursor:not-allowed}
+    a{color:#a9f4dc}a:not(.button){overflow-wrap:anywhere}
+    .badge{display:inline-block;border-radius:100px;background:#214d44;color:#baf4e2;padding:3px 10px;font-size:12px;font-weight:750;margin-bottom:8px}
+    .mono{font:14px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere;background:#142022;border:1px solid var(--line);border-radius:10px;padding:10px}
+    .numbered{counter-reset:step;padding:0;list-style:none}
+    .numbered li{counter-increment:step;position:relative;margin:12px 0;padding-left:35px}
+    .numbered li::before{content:counter(step);position:absolute;left:0;top:0;background:#2b4d46;color:var(--accent);border-radius:8px;font-weight:750;width:25px;height:25px;display:grid;place-items:center;font-size:13px}
+    details{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}summary{cursor:pointer;font-weight:700;color:var(--ink)}
+    ul{padding-left:19px}li{margin:7px 0}.notice{color:#f5d5a0;background:#4938243d;padding:10px 13px;border-radius:10px;border:1px solid #7b603b}
+    #status{min-height:24px;font-size:14px;margin-top:11px;color:var(--accent)}
+    #copyFallback{display:none}#authBox[hidden],#flclashPanel[hidden],#iosPanel[hidden]{display:none}
+    footer{font-size:12px;color:var(--muted);text-align:center;margin-top:22px}
+    @media(max-width:430px){main{padding:18px 12px}.card{padding:16px}.buttons{flex-direction:column}}
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="mark" aria-hidden="true">j</div>
+    <div><h1>Connect through jNet</h1><div class="muted">Internet sharing setup</div></div>
+  </header>
+
+  <section class="card">
+    <div class="eyebrow">Connection</div>
+    <div class="badge">Host ready</div>
+    <div class="mono" id="endpoint">{{JNET_HOST}}:{{JNET_PORT}}</div>
+    <small>Stay connected to the host phone's Wi-Fi or Wi-Fi Direct network while setting up your client.</small>
+  </section>
+
+  <section class="card">
+    <div class="eyebrow">Step 1</div>
+    <h2>Install a proxy client</h2>
+    <label for="platform">Your device</label>
+    <select id="platform" aria-label="Platform">
+      <option value="android">Android</option><option value="windows">Windows</option>
+      <option value="linux">Linux</option><option value="macos">macOS</option><option value="ios">iPhone / iPad</option>
+    </select>
+    <div id="flclashPanel">
+      <p><strong>FlClash</strong> is recommended for this device. Its profile will include the jNet SOCKS5 connection, DNS and routing rules.</p>
+      <label for="package">Installer</label>
+      <select id="package" aria-label="FlClash installer"></select>
+      <div class="buttons">
+        <a class="button primary" id="downloadApp" href="#">Download FlClash</a>
+      </div>
+      <small>Downloads are streamed from the official FlClash release through your host phone. No separate internet access is needed on this device.</small>
+    </div>
+    <div id="iosPanel" hidden>
+      <p><strong>FlClash is not released for iOS.</strong> Use Potatso from the App Store, then add a SOCKS5 proxy using the endpoint above.</p>
+      <p class="muted">An App Store installation requires internet access. If Potatso is already installed, enter the host address and port shown above.</p>
+    </div>
+    <details>
+      <summary>Other proxy clients (keep existing options)</summary>
+      <ul id="alternatives"></ul>
+      <small>These apps remain available. Their setup requires entering the SOCKS5 endpoint manually or importing a supported proxy QR.</small>
+    </details>
+  </section>
+
+  <section class="card" id="importSection">
+    <div class="eyebrow">Step 2</div>
+    <h2>Import the jNet connection</h2>
+    <p>Do not create any proxy groups or nodes by hand. This profile already contains them.</p>
+    <div id="authBox" hidden>
+      <div class="notice">Your host has enabled a SOCKS5 password. Enter the password provided by the host to create a private, 10-minute import link. Use this only on a trusted Wi-Fi network: the captive page uses HTTP.</div>
+      <label for="proxyPassword">jNet proxy password</label>
+      <input id="proxyPassword" type="password" autocomplete="off" placeholder="Password from your host">
+    </div>
+    <div class="buttons">
+      <button type="button" class="primary" id="importButton">Import into FlClash</button>
+      <button type="button" class="secondary" id="downloadYaml">Download YAML</button>
+      <button type="button" class="secondary" id="copyProfile">Copy profile URL</button>
+    </div>
+    <div id="status" role="status" aria-live="polite"></div>
+    <div id="copyFallback"><label for="profileUrl">Profile URL (select to copy)</label><input id="profileUrl" readonly></div>
+    <small>If the captive sign-in window blocks opening FlClash, open this page in your full browser. If the import button still fails, use Copy profile URL and import it from FlClash's Profiles screen.</small>
+  </section>
+
+  <section class="card">
+    <div class="eyebrow">Step 3</div>
+    <h2>Enable full-app networking</h2>
+    <ol class="numbered" id="instructions">
+      <li>In FlClash, apply the imported jNet profile. Leave routing mode on <strong>Rule</strong>, not Direct.</li>
+      <li>On Android, open <strong>Dashboard → Edit</strong>, add the <strong>VPN</strong> control if missing, then exit editing.</li>
+      <li>Turn on <strong>VPN</strong> and approve Android's VPN request. On desktop, enable <strong>TUN</strong> and authorize it when prompted.</li>
+      <li>Open a website and verify the host phone's jNet traffic counters increase.</li>
+    </ol>
+    <p class="muted" id="platformHint">Android: you may need to add the VPN control to the dashboard once.</p>
+    <p class="notice">Importing a configuration does <strong>not</strong> grant VPN permission or start VPN/TUN automatically. You must enable it inside FlClash.</p>
+  </section>
+  <footer>jNet • Setup page is served locally by your host phone</footer>
+</main>
+<script>
+(function () {
+  'use strict';
+  var auth = '{{JNET_AUTH}}' === 'true';
+  var platform = document.getElementById('platform');
+  var packageSelect = document.getElementById('package');
+  var download = document.getElementById('downloadApp');
+  var alternatives = document.getElementById('alternatives');
+  var status = document.getElementById('status');
+  var catalog = {
+    android: [
+      ['flclash-android-arm64','Android ARM64 (most phones)'],
+      ['flclash-android-arm','Android 32-bit ARM'],
+      ['flclash-android-x64','Android x86_64']
+    ],
+    windows: [
+      ['flclash-windows','Windows x64 setup'],
+      ['flclash-windows-arm','Windows ARM64 setup']
+    ],
+    linux: [
+      ['flclash-linux','Linux x64 .deb (Mint/Ubuntu)'],
+      ['flclash-linux-arm','Linux ARM64 .deb'],
+      ['flclash-linux-appimage','Linux x64 AppImage'],
+      ['flclash-linux-arm-appimage','Linux ARM64 AppImage']
+    ],
+    macos: [
+      ['flclash-macos','macOS Apple Silicon'],
+      ['flclash-macos-intel','macOS Intel']
+    ]
+  };
+  var other = {
+    android: [['android','NekoBox Android ARM64'],['android-arm','NekoBox Android 32-bit ARM']],
+    windows: [['windows','v2rayN Windows x64'],['windows-arm','v2rayN Windows ARM64']],
+    linux: [['linux','v2rayN Linux x64'],['linux-arm','v2rayN Linux ARM64']],
+    macos: [],
+    ios: []
+  };
+  function detect() {
+    var ua = navigator.userAgent.toLowerCase();
+    if (/iphone|ipad|ipod/.test(ua)) return 'ios';
+    if (/android/.test(ua)) return 'android';
+    if (/windows/.test(ua)) return 'windows';
+    if (/macintosh|mac os/.test(ua)) return 'macos';
+    return 'linux';
+  }
+  function link(key) { return '/download/' + encodeURIComponent(key); }
+  function update() {
+    var os = platform.value;
+    var supports = os !== 'ios';
+    document.getElementById('flclashPanel').hidden = !supports;
+    document.getElementById('iosPanel').hidden = supports;
+    document.getElementById('importSection').hidden = !supports;
+    packageSelect.textContent = '';
+    (catalog[os] || []).forEach(function (choice) {
+      var option = document.createElement('option');
+      option.value = choice[0]; option.textContent = choice[1]; packageSelect.appendChild(option);
+    });
+    updateDownload();
+    alternatives.textContent = '';
+    (other[os] || []).forEach(function (choice) {
+      var item = document.createElement('li');
+      var anchor = document.createElement('a');
+      anchor.href = link(choice[0]); anchor.textContent = choice[1];
+      item.appendChild(anchor); alternatives.appendChild(item);
+    });
+    if (!alternatives.children.length) {
+      var item = document.createElement('li');
+      item.textContent = os === 'ios' ? 'Potatso (App Store)' : 'Use any compatible SOCKS5 client you already have.';
+      alternatives.appendChild(item);
+    }
+    document.getElementById('platformHint').textContent =
+      os === 'android' ? 'Android: tap Dashboard → Edit, add VPN if it is missing, then enable VPN.' :
+      os === 'ios' ? 'iOS: set up Potatso manually using the SOCKS5 address and port above.' :
+      'Desktop: enable TUN in FlClash after importing. An administrator prompt may appear.';
+    status.textContent = '';
+  }
+  function updateDownload() {
+    download.href = link(packageSelect.value);
+  }
+  function message(text, error) {
+    status.textContent = text; status.style.color = error ? '#ffbdab' : '#7addc8';
+  }
+  async function profileUrl() {
+    if (!auth) return window.location.origin + '/flclash.yaml';
+    var pwd = document.getElementById('proxyPassword').value;
+    if (!pwd) { message('Enter the proxy password provided by your host.', true); return null; }
+    var response = await fetch('/flclash/claim', {
+      method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:'password=' + encodeURIComponent(pwd), cache:'no-store'
+    });
+    if (!response.ok) {
+      message(response.status === 403 ? 'Incorrect proxy password.' : 'Could not create an import link.', true);
+      return null;
+    }
+    return new URL((await response.text()).trim(), window.location.origin).href;
+  }
+  async function withProfile(callback) {
+    try {
+      message('Preparing your jNet configuration…', false);
+      var url = await profileUrl();
+      if (url) await callback(url);
+    } catch (_) {
+      message('Could not reach the jNet setup server. Check your Wi-Fi connection.', true);
+    }
+  }
+  document.getElementById('importButton').addEventListener('click', function () {
+    withProfile(async function (url) {
+      message('Opening FlClash. Approve the import, then enable VPN/TUN inside the app.', false);
+      window.location.href = 'clash://install-config?url=' + encodeURIComponent(url);
+    });
+  });
+  document.getElementById('downloadYaml').addEventListener('click', function () {
+    withProfile(async function (url) {
+      var a = document.createElement('a');
+      a.href = url; a.download = 'jnet-flclash.yaml';
+      document.body.appendChild(a); a.click(); a.remove();
+      message('Configuration download requested. Import the file through FlClash Profiles.', false);
+    });
+  });
+  document.getElementById('copyProfile').addEventListener('click', function () {
+    withProfile(async function (url) {
+      var fallback = document.getElementById('copyFallback');
+      var field = document.getElementById('profileUrl');
+      field.value = url; fallback.style.display = 'block';
+      var copied = false;
+      try { if (navigator.clipboard) { await navigator.clipboard.writeText(url); copied = true; } }
+      catch (_) {}
+      if (!copied) {
+        field.focus(); field.select();
+        try { copied = document.execCommand('copy'); } catch (_) {}
+      }
+      message(copied ? 'Profile URL copied. Paste it into FlClash Profiles → Import from URL.' :
+        'Select the profile URL above to copy it into FlClash.', false);
+    });
+  });
+  document.getElementById('authBox').hidden = !auth;
+  platform.value = detect();
+  platform.addEventListener('change', update);
+  packageSelect.addEventListener('change', updateDownload);
+  update();
+})();
+</script>
+</body>
+</html>
