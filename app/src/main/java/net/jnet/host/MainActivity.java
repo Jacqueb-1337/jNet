@@ -144,12 +144,19 @@ public final class MainActivity extends Activity {
             else requestPermissions(new String[]{Manifest.permission.NEARBY_WIFI_DEVICES}, 10);
         });
 
-        mobileOnly = new CheckBox(this);
-        mobileOnly.setText("Use mobile data for proxy traffic");
-        mobileOnly.setTextColor(INK);
-        add(settingsPanel, mobileOnly, 4);
         lan = modeButton(content, "Current Wi-Fi", "Share on the router you’re already connected to");
         lan.setOnClickListener(view -> start(HostService.LAN));
+
+        // This setting only affects Current Wi-Fi sharing, not Wi-Fi Direct.
+        var currentWifiOptions = panel();
+        add(content, currentWifiOptions, 4);
+        mobileOnly = new CheckBox(this);
+        mobileOnly.setText("Use mobile data for Current Wi-Fi");
+        mobileOnly.setTextColor(INK);
+        mobileOnly.setMinHeight(dp(48));
+        add(currentWifiOptions, mobileOnly, 0);
+        add(currentWifiOptions,
+            label("Off: phone’s default internet (usually Wi-Fi). On: mobile data only.", 13, MUTED), 2);
 
         section(content, "Settings");
         var hotspot = listRow(content, "Wi-Fi Direct settings", "Network name, password and band", "›");
