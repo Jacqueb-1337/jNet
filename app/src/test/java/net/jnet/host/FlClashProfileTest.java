@@ -29,7 +29,8 @@ public class FlClashProfileTest {
         List<Map<String, Object>> groups = (List<Map<String, Object>>) config.get("proxy-groups");
         assertEquals("jNet", groups.get(0).get("name"));
         assertEquals(List.of("jNet SOCKS5"), groups.get(0).get("proxies"));
-        assertEquals("MATCH,jNet", ((List<String>) config.get("rules")).getLast());
+        List<String> rules = (List<String>) config.get("rules");
+        assertEquals("MATCH,jNet", rules.get(rules.size() - 1));
         assertTrue(((List<String>) config.get("rules")).contains("IP-CIDR,192.168.49.1/32,DIRECT,no-resolve"));
         // Enabling VPN/TUN belongs to FlClash/OS, never assumed from a YAML import.
         assertFalse(config.containsKey("tun"));
