@@ -70,6 +70,19 @@ public final class PrismActivity extends Activity {
                   android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR));
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         mobileOnly = oldPrefs().getBoolean("mobileOnly", false);
+        try {
+            proxyPassword = ProxySecretStore.read(this);
+            // Carry over an already-running password from an older version
+            // that never persisted it, without stopping the shared network.
+            if (proxyPassword.isEmpty() && HostService.active &&
+                    !HostService.proxyPassword.isEmpty()) {
+                proxyPassword = HostService.proxyPassword;
+                ProxySecretStore.write(this, proxyPassword);
+            }
+        } catch (Exception error) {
+            android.util.Log.e("jNet", "Could not restore proxy password", error);
+            Toast.makeText(this, "Could not restore the saved proxy password.", Toast.LENGTH_LONG).show();
+        }
         web = new WebView(this);
         web.setBackgroundColor(0xff121214);
         web.setOverScrollMode(WebView.OVER_SCROLL_NEVER);
@@ -130,6 +143,15 @@ public final class PrismActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        mobileOnly = oldPrefs().getBoolean("mobileOnly", false);
+        try {
+            proxyPassword = ProxySecretStore.read(this);
+        } catch (Exception error) {
+            android.util.Log.e("jNet", "Could not reload proxy password", error);
+            Toast.makeText(this, "Could not reload the saved proxy password.",
+                    Toast.LENGTH_LONG).show();
+        }
+        if (pageReady) pushConfig();
         if (updater != null) updater.onResume();
         handler.removeCallbacks(refresh);
         handler.post(refresh);
@@ -168,6 +190,8 @@ public final class PrismActivity extends Activity {
         try {
             JSONObject config = new JSONObject();
             config.put("mobileOnly", mobileOnly);
+            config.put("selectedMode", oldPrefs().getString("selectedMode", HostService.LAN));
+            config.put("selectedTab", oldPrefs().getString("selectedTab", "dashboard"));
             config.put("proxyPassword", proxyPassword);
             config.put("wifiPassword", HostService.wifiPassword(this));
             config.put("wifiBand", HostService.bandIndex(oldPrefs().getInt("wifiBand", 0)));
@@ -204,6 +228,12 @@ public final class PrismActivity extends Activity {
             payload.put("active", HostService.active);
             payload.put("status", HostService.status);
             payload.put("mode", HostService.diagnosticMode);
+            if (HostService.active) {
+                if ("Wi-Fi Direct".equals(HostService.diagnosticMode))
+                    rememberMode(HostService.WIFI);
+                else if ("Current Wi-Fi".equals(HostService.diagnosticMode))
+                    rememberMode(HostService.LAN);
+            }
             payload.put("details", HostService.details);
             payload.put("upstream", HostService.upstreamStatus);
             payload.put("endpoint", HostService.endpoint);
@@ -229,6 +259,7 @@ public final class PrismActivity extends Activity {
             toast("Stop the current connection before switching modes.");
             return;
         }
+        oldPrefs().edit().putString("selectedMode", mode).apply();
         if (mode.equals(HostService.WIFI) &&
                 checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.NEARBY_WIFI_DEVICES}, REQUEST_NEARBY);
@@ -327,6 +358,11 @@ public final class PrismActivity extends Activity {
             }).show();
     }
 
+    private void rememberMode(String mode) {
+        if (!mode.equals(oldPrefs().getString("selectedMode", HostService.LAN)))
+            oldPrefs().edit().putString("selectedMode", mode).apply();
+    }
+
     private void saveSettings(String json) {
         if (HostService.active) { toast("Stop sharing before changing settings."); return; }
         try {
@@ -341,6 +377,7 @@ public final class PrismActivity extends Activity {
                 toast("Wi-Fi Direct password must be 8 to 63 printable characters."); return;
             }
             if (band < 0 || band > 2) { toast("Select a Wi-Fi band."); return; }
+            ProxySecretStore.write(this, socks);
             mobileOnly = data.optBoolean("mobileOnly", false);
             proxyPassword = socks;
             oldPrefs().edit().putBoolean("mobileOnly", mobileOnly).putInt("wifiBand", band).apply();
@@ -353,6 +390,19 @@ public final class PrismActivity extends Activity {
     }
 
     private final class Bridge {
+        @JavascriptInterface public void mode(String value) {
+            if (!HostService.WIFI.equals(value) && !HostService.LAN.equals(value)) return;
+            runOnUiThread(() -> {
+                if (!HostService.active) rememberMode(value);
+            });
+        }
+
+        @JavascriptInterface public void tab(String value) {
+            if (!"dashboard".equals(value) && !"sharing".equals(value) &&
+                    !"activity".equals(value) && !"settings".equals(value)) return;
+            runOnUiThread(() -> oldPrefs().edit().putString("selectedTab", value).apply());
+        }
+
         @JavascriptInterface public void start(String mode) {
             if (!HostService.WIFI.equals(mode) && !HostService.LAN.equals(mode)) return;
             runOnUiThread(() -> PrismActivity.this.start(mode));

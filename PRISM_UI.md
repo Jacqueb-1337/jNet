@@ -24,9 +24,64 @@ Puppeteer smoke-tested 392x854 and 350x750 viewports: all four tabs and repeated
 Reused Prism scripts identify GPL-3.0-only provenance and FlClash/prism_ui source. Preserve upstream copyright/license headers. Review GPL obligations before redistributing combined work.
 
 
-## Android system bars and glass (v0.1.30)
-Android 15/16 targetSdk 35 draws activities edge-to-edge. PrismActivity now owns status, display-cutout, navigation, and keyboard insets on a native FrameLayout, so the entire WebView viewport excludes system bars. The dock, header, chart, and sheets therefore do not overlap them.
+## Android system bars and optical refraction (v0.1.31)
 
-On Android WebView, nested CSS SVG backdrop displacement filters could sample the wrong region and make the glass appear cut off, especially on the floating lens. The Android path now uses compositor-aligned CSS live backdrop blur, saturation and brightness with specular lens gradients. Desktop Chromium retains the original SVG refraction path. The Android look prioritizes accurate backdrop alignment and complete optical coverage rather than pretending to match Impeller's refraction pixel-for-pixel.
+Keep the native FrameLayout WindowInsetsCompat padding from v0.1.30 for status
+bar, display cutout, gesture/navigation bar and keyboard. That fix is independent
+of glass optics.
 
-QA: Android UA browser simulation with 35px top and 27px bottom insets tested header, navigation dock and sheet bounds, stable glass backing, repeated tab scrolling, 350px narrow viewport and zero JavaScript errors. Android device acceptance testing is still required.
+The v0.1.30 Android-only CSS blur substitute was **not** real liquid glass.
+v0.1.31 removes the substitute and restores the same live, SVG-displaced
+backdrop used by the Prism JS v3 prototype.
+
+Optical bug root cause:
+- Chromium's feDisplacementMap decodes generated PNG channel values into
+  linear RGB. The original displacement texture incorrectly wrote a neutral
+  offset as sRGB 128; decoded it is approximately 0.216, not 0.5.
+- With a 150px displacement scale that created roughly a 42px phantom shift,
+  duplicated text, and transparent/cut-off regions.
+- Neutral displacement must be encoded as sRGB about 188 (linear 0.5).
+  Every displacement component is now encoded by the sRGB transfer function
+  before the map is uploaded. Undefined texture outskirts are filled with
+  a neutral backdrop value via feFlood and feComposite.
+- The pill base and moving lens are separate sibling SVG backdrop-filter
+  surfaces; the parent nav is not an intermediate backdrop root.
+- Optical transfer uses a 4097-step LUT. A coalesced requestAnimationFrame
+  scheduler initializes maps without the timer-based debounce starvation
+  that left the dock transparent on first paint.
+
+This is actual live SVG refraction, NOT an appearance-only blur.
+It still cannot claim pixel-identical rendering to Flutter/Impeller and needs
+an end-to-end Android WebView acceptance test on the target device.
+
+## Persisted settings (v0.1.31)
+
+- Selected Wi-Fi Direct vs Current Wi-Fi mode: Android SharedPreferences
+  (selectedMode), plus WebView localStorage for instant first paint.
+  Active HostService mode wins only when it is actually sharing.
+- Current tab: saved in native preferences, restored on UI startup.
+  Per-tab scroll positions remain when switching tabs.
+- Mobile-data preference, Wi-Fi band, MB/s vs Mbps: native preferences.
+- Wi-Fi Direct network password: existing private host preferences.
+- SOCKS5 proxy password: new ProxySecretStore uses Android Keystore AES-GCM
+  and private encrypted preferences. MainActivity and PrismActivity share it.
+- Classic settings changes are reloaded on return to the Prism activity.
+- Session traffic samples and logs are session data, not persistent settings.
+
+## Regression checks
+
+Puppeteer Android-user-agent, 392px and 350px layouts:
+- Inspect real SVG feDisplacementMap (not a CSS blur fallback).
+- High-contrast striped backdrop with the word "ALIGN": refracted text
+  remains registered to the original image, with no shifted duplicate.
+- Dock pill and lens both receive optical filters, and no ancestor
+  backdrop-filter isolates the moving lens.
+- Mode stays on Wi-Fi Direct across repeated inactive status heartbeats.
+- Active service may override the selection only when it reports a recognized
+  active mode. Mode/tabs save through the native bridge.
+- Repeated tab switching, sheet opening/closing and document scrolling.
+- No JS errors or horizontal overflow on narrow viewports.
+- Android debug build, lint and unit tests via GitHub Actions.
+
+The actual Android device needs verification for GPU refraction,
+hotspot lifecycle, credentials, and system insets before claiming full parity.
