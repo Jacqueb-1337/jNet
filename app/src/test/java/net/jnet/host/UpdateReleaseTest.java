@@ -15,7 +15,7 @@ import static org.junit.Assert.*;
 public class UpdateReleaseTest {
     @Rule public TemporaryFolder temp = new TemporaryFolder();
 
-    private static JSONObject release(String version, String digest, String url, boolean draft) {
+    private static JSONObject release(String version, String digest, String url, boolean draft) throws Exception {
         JSONObject asset = new JSONObject();
         asset.put("name", "jNet-" + version + ".apk");
         asset.put("browser_download_url", url);
@@ -33,7 +33,7 @@ public class UpdateReleaseTest {
             version + "/jNet-" + version + ".apk";
     }
 
-    @Test public void choosesHighestNewerSignedRelease() {
+    @Test public void choosesHighestNewerSignedRelease() throws Exception {
         String digest = "sha256:" + "a".repeat(64);
         JSONArray releases = new JSONArray()
             .put(release("0.1.25", digest, validUrl("0.1.25"), false))
@@ -47,7 +47,7 @@ public class UpdateReleaseTest {
         assertEquals(12345, match.size);
     }
 
-    @Test public void ignoresDraftsMalformedVersionsAndTamperedAssets() {
+    @Test public void ignoresDraftsMalformedVersionsAndTamperedAssets() throws Exception {
         String digest = "sha256:" + "b".repeat(64);
         JSONArray releases = new JSONArray()
             .put(release("0.2.0", digest, validUrl("0.2.0"), true))
