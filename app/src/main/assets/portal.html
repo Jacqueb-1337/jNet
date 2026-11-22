@@ -107,6 +107,12 @@
       <li>Turn on <strong>VPN</strong> and approve Android's VPN request. On desktop, enable <strong>TUN</strong> and authorize it when prompted.</li>
       <li>Open a website and verify the host phone's jNet traffic counters increase.</li>
     </ol>
+    <ol class="numbered" id="iosInstructions" hidden>
+      <li>Install and open Potatso. You need to install it from the App Store before going offline.</li>
+      <li>Add a SOCKS5 proxy using the jNet host IP address and port shown above. If enabled, enter username <strong>jnet</strong> and the password from your host.</li>
+      <li>Enable Potatso's VPN connection and approve the iOS VPN configuration request.</li>
+      <li>Open a website and check that the host phone's jNet traffic counters increase.</li>
+    </ol>
     <p class="muted" id="platformHint">Android: you may need to add the VPN control to the dashboard once.</p>
     <p class="notice">Importing a configuration does <strong>not</strong> grant VPN permission or start VPN/TUN automatically. You must enable it inside FlClash.</p>
   </section>
@@ -151,7 +157,7 @@
   };
   function detect() {
     var ua = navigator.userAgent.toLowerCase();
-    if (/iphone|ipad|ipod/.test(ua)) return 'ios';
+    if (/iphone|ipad|ipod/.test(ua) || (ua.includes('macintosh') && navigator.maxTouchPoints > 1)) return 'ios';
     if (/android/.test(ua)) return 'android';
     if (/windows/.test(ua)) return 'windows';
     if (/macintosh|mac os/.test(ua)) return 'macos';
@@ -164,6 +170,8 @@
     document.getElementById('flclashPanel').hidden = !supports;
     document.getElementById('iosPanel').hidden = supports;
     document.getElementById('importSection').hidden = !supports;
+    document.getElementById('instructions').hidden = !supports;
+    document.getElementById('iosInstructions').hidden = supports;
     packageSelect.textContent = '';
     (catalog[os] || []).forEach(function (choice) {
       var option = document.createElement('option');
