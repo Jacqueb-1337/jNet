@@ -3,6 +3,11 @@ package net.jnet.host;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.Locale;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 final class UpdateRelease {
     private static final long MAX_APK_BYTES = 200L * 1024 * 1024;
@@ -51,6 +56,25 @@ final class UpdateRelease {
             }
         }
         return newest;
+    }
+
+    static boolean matchesSha256(File file, String expected) throws IOException {
+        if (expected == null || !expected.matches("[0-9a-f]{64}")) return false;
+        final MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
+        byte[] buffer = new byte[64 * 1024];
+        try (FileInputStream input = new FileInputStream(file)) {
+            int bytes;
+            while ((bytes = input.read(buffer)) != -1) digest.update(buffer, 0, bytes);
+        }
+        StringBuilder hex = new StringBuilder(64);
+        for (byte item : digest.digest())
+            hex.append(String.format(Locale.ROOT, "%02x", item & 0xff));
+        return expected.equals(hex.toString());
     }
 
     private static boolean isVersion(String version) {
