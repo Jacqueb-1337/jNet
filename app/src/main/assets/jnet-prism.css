@@ -120,3 +120,22 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 
 
 .segment button:disabled.selected{opacity:1}.segment button:disabled:not(.selected){opacity:.64}
+
+/* Android WebView stable-glass compositor. The native WebView viewport is
+   already inset from Android's system bars; every blurred pixel comes from
+   the actual live backdrop directly behind its glass surface. */
+#navDock[data-glass-mode="stable"]{
+  background:linear-gradient(155deg,rgba(101,105,126,.53),rgba(59,60,77,.63) 60%,rgba(43,45,60,.67));
+  border:1px solid rgba(227,235,255,.22);
+  box-shadow:0 5px 25px rgba(0,0,0,.39),inset 0 1px rgba(255,255,255,.22);
+}
+#dockLens[data-glass-mode="stable"]{
+  background:linear-gradient(152deg,rgba(217,229,255,.38) 0%,rgba(151,162,193,.22) 44%,rgba(92,99,134,.30) 100%);
+  border-color:rgba(232,241,255,.30);
+  box-shadow:inset 0 2px 4px rgba(255,255,255,.22),
+             inset 0 -3px 8px rgba(27,32,58,.16),
+             0 3px 12px rgba(0,0,0,.32);
+}
+#sheetPanel[data-glass-mode="stable"]{
+  background:linear-gradient(156deg,rgba(67,70,86,.91),rgba(36,37,48,.95) 48%,rgba(40,41,51,.96));
+}

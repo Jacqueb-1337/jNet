@@ -6,10 +6,17 @@
  * The optical map follows the source's rounded-box signed distance, circular bevel,
  * negative lens refraction, saturation, translucency and optional RGB splitting.
  * Chrome's SVG backdrop sampling is not equivalent to Impeller's LiquidGlassHost atlases.
+ * Android WebView deliberately uses blur/saturation with gloss instead of nested SVG
+ * displacement, which otherwise misaligns live sampled content and clips the lens.
  */
 (function(){
 'use strict';
 const NS='http://www.w3.org/2000/svg';
+// Android WebView misregisters nested SVG displacement filters when the dock
+// is composited over a scrolling WebView. Use the live CSS backdrop there.
+// This prevents undefined/transparent bands and sampled pixels from
+// appearing at the wrong screen coordinates.
+const stableAndroidGlass = /Android/i.test(navigator.userAgent);
 const create=(tag,attrs={})=>{const el=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,String(v)));return el};
 const styles={
   pill:{refraction:60,bevel:20,blur:0,haze:.72,hazeBlur:15.6,saturation:1.925,brightness:1,tint:[74,75,81,.48]},
@@ -65,6 +72,21 @@ class GlassHost{
     if(Math.abs(w-n.lastW)<1&&Math.abs(h-n.lastH)<1)return;
     n.lastW=w;n.lastH=h;
     const m=styles[n.type];if(!m)return;
+    if(stableAndroidGlass){
+      const filter=n.type==='lens'
+        ? 'blur(7px) saturate(1.35) brightness(1.08)'
+        : n.type==='pill'
+          ? 'blur(20px) saturate(1.65) brightness(1.05)'
+          : n.type==='menu'
+            ? 'blur(22px) saturate(1.42) brightness(1.02)'
+            : 'blur(15px) saturate(1.5) brightness(1.04)';
+      n.element.style.backdropFilter=filter;
+      n.element.style.webkitBackdropFilter=filter;
+      n.element.dataset.glassMode='stable';
+      n.element.style.setProperty('--optical-tint',
+        'rgba('+m.tint[0]+','+m.tint[1]+','+m.tint[2]+','+m.tint[3]+')');
+      return;
+    }
     const image=mapImage(w,h,n.type),f=n.filter;f.replaceChildren();
     let source='SourceGraphic';
     if(m.blur>0){f.append(create('feGaussianBlur',{in:source,stdDeviation:m.blur,result:'frost'}));source='frost'}

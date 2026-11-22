@@ -22,6 +22,12 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
+import android.view.ViewGroup;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.graphics.Insets;
 import java.nio.charset.StandardCharsets;
 import org.json.JSONObject;
 
@@ -51,8 +57,17 @@ public final class PrismActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().setStatusBarColor(0xff121214);
-        getWindow().setNavigationBarColor(0xff121214);
+        // Android targetSdk 35+ draws behind system bars unless we own insets.
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(android.graphics.Color.TRANSPARENT);
+        getWindow().setNavigationBarContrastEnforced(false);
+        // Keep the LAYOUT_FULLSCREEN and LAYOUT_HIDE_NAVIGATION flags set
+        // by WindowCompat; only request light-colored system-bar icons.
+        int flags = getWindow().getDecorView().getSystemUiVisibility();
+        getWindow().getDecorView().setSystemUiVisibility(flags &
+                ~(android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR |
+                  android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR));
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         mobileOnly = oldPrefs().getBoolean("mobileOnly", false);
         web = new WebView(this);
@@ -81,7 +96,28 @@ public final class PrismActivity extends Activity {
                 }
             }
         });
-        setContentView(web);
+        // Pad the native container, not the HTML. The entire WebView viewport
+        // becomes the usable area between the notification and navigation bars.
+        FrameLayout safeRoot = new FrameLayout(this);
+        safeRoot.setBackgroundColor(0xff121214);
+        safeRoot.addView(web, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        ViewCompat.setOnApplyWindowInsetsListener(safeRoot, (view, insets) -> {
+            Insets bars = insets.getInsets(
+                    WindowInsetsCompat.Type.systemBars() |
+                    WindowInsetsCompat.Type.displayCutout());
+            Insets keyboard = insets.getInsets(WindowInsetsCompat.Type.ime());
+            int bottom = Math.max(bars.bottom, keyboard.bottom);
+            if (view.getPaddingLeft() != bars.left ||
+                    view.getPaddingTop() != bars.top ||
+                    view.getPaddingRight() != bars.right ||
+                    view.getPaddingBottom() != bottom) {
+                view.setPadding(bars.left, bars.top, bars.right, bottom);
+            }
+            return WindowInsetsCompat.CONSUMED;
+        });
+        setContentView(safeRoot);
+        ViewCompat.requestApplyInsets(safeRoot);
         web.loadUrl("file:///android_asset/jnet-prism.html");
         updater = new InAppUpdater(this);
         updater.onCreate(state == null);
