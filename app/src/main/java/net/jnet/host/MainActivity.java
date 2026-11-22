@@ -12,6 +12,7 @@ import android.widget.*;
 
 public final class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private InAppUpdater updater;
     private TextView status, details;
     private String pendingShare;
     private View wifi, lan;
@@ -155,67 +156,10 @@ public final class MainActivity extends Activity {
         hotspot.setOnClickListener(v -> hotspotDialog());
         expandable(content, "Connection settings", settingsPanel);
         expandable(content, "Activity & diagnostics", activityPanel);
-        if (state == null) checkForUpdate();
+        updater = new InAppUpdater(this);
+        updater.onCreate(state == null);
         refresh.run();
         handler.removeCallbacks(refresh);
-    }
-
-    private void checkForUpdate() {
-        new Thread(() -> {
-            try {
-                String installed = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-                var url = new java.net.URL("https://api.github.com/repos/Jacqueb-1337/jNet/releases?per_page=20");
-                var connection = (java.net.HttpURLConnection) url.openConnection();
-                connection.setConnectTimeout(6000);
-                connection.setReadTimeout(6000);
-                try {
-                    try (var input = connection.getInputStream()) {
-                        var releases = new org.json.JSONArray(new String(input.readAllBytes(),
-                            java.nio.charset.StandardCharsets.UTF_8));
-                        String newest = installed;
-                        for (int i = 0; i < releases.length(); i++) {
-                            var release = releases.getJSONObject(i);
-                            String tag = release.optString("tag_name");
-                            if (release.optBoolean("draft") || !tag.matches("v[0-9]{1,6}\\.[0-9]{1,6}\\.[0-9]{1,6}")) continue;
-                            boolean hasApk = false;
-                            var assets = release.getJSONArray("assets");
-                            for (int j = 0; j < assets.length(); j++) {
-                                if (assets.getJSONObject(j).optString("name").equals("jNet-" + tag.substring(1) + ".apk")) hasApk = true;
-                            }
-                            if (hasApk && compareVersions(tag.substring(1), newest) > 0) newest = tag.substring(1);
-                        }
-                        if (newest.equals(installed)) return;
-                        String version = newest;
-                        runOnUiThread(() -> {
-                            if (isFinishing() || isDestroyed()) return;
-                            new android.app.AlertDialog.Builder(this)
-                                .setTitle("jNet " + version + " is available")
-                                .setNegativeButton("Later", null)
-                                .setPositiveButton("Open release", (dialog, which) -> {
-                                    var release = android.net.Uri.parse("https://github.com/Jacqueb-1337/jNet/releases/tag/v" + version);
-                                    try { startActivity(new Intent(Intent.ACTION_VIEW, release)); }
-                                    catch (android.content.ActivityNotFoundException e) {
-                                        Toast.makeText(this, "Install a browser to open the release.", Toast.LENGTH_SHORT).show();
-                                    }
-                                }).show();
-                        });
-                    }
-                } finally {
-                    connection.disconnect();
-                }
-            } catch (Exception e) {
-                android.util.Log.d("jNet", "Update check unavailable", e);
-            }
-        }, "jNet update check").start();
-    }
-
-    private static int compareVersions(String first, String second) {
-        String[] a = first.split("\\."), b = second.split("\\.");
-        for (int i = 0; i < 3; i++) {
-            int order = Integer.compare(Integer.parseInt(a[i]), Integer.parseInt(b[i]));
-            if (order != 0) return order;
-        }
-        return 0;
     }
 
     private void start(String action) {
@@ -553,6 +497,14 @@ public final class MainActivity extends Activity {
         } catch (com.google.zxing.WriterException exception) {
             Toast.makeText(this, "Could not create the setup QR.", Toast.LENGTH_SHORT).show();
         }
+    }
+    @Override protected void onResume() {
+        super.onResume();
+        if (updater != null) updater.onResume();
+    }
+    @Override protected void onPause() {
+        if (updater != null) updater.onPause();
+        super.onPause();
     }
     @Override protected void onStart() { super.onStart(); handler.post(refresh); }
     @Override protected void onStop() { handler.removeCallbacks(refresh); super.onStop(); }
