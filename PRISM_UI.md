@@ -23,3 +23,10 @@ Puppeteer smoke-tested 392x854 and 350x750 viewports: all four tabs and repeated
 ## License/attribution
 Reused Prism scripts identify GPL-3.0-only provenance and FlClash/prism_ui source. Preserve upstream copyright/license headers. Review GPL obligations before redistributing combined work.
 
+
+## Android system bars and glass (v0.1.30)
+Android 15/16 targetSdk 35 draws activities edge-to-edge. PrismActivity now owns status, display-cutout, navigation, and keyboard insets on a native FrameLayout, so the entire WebView viewport excludes system bars. The dock, header, chart, and sheets therefore do not overlap them.
+
+On Android WebView, nested CSS SVG backdrop displacement filters could sample the wrong region and make the glass appear cut off, especially on the floating lens. The Android path now uses compositor-aligned CSS live backdrop blur, saturation and brightness with specular lens gradients. Desktop Chromium retains the original SVG refraction path. The Android look prioritizes accurate backdrop alignment and complete optical coverage rather than pretending to match Impeller's refraction pixel-for-pixel.
+
+QA: Android UA browser simulation with 35px top and 27px bottom insets tested header, navigation dock and sheet bounds, stable glass backing, repeated tab scrolling, 350px narrow viewport and zero JavaScript errors. Android device acceptance testing is still required.
