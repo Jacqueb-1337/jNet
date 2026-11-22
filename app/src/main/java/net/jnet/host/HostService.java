@@ -17,6 +17,7 @@ public final class HostService extends Service {
     static String details = "";
     static String endpoint = "";
     static boolean active;
+    static long startedAt;
     static String proxyPassword = "";
     static String upstreamStatus = "";
     static SessionStats stats = new SessionStats();
@@ -72,10 +73,11 @@ public final class HostService extends Service {
         diagnosticEndpoint = "";
         stats.note("Sharing started");
         active = true;
+        startedAt = System.currentTimeMillis();
         var notifications = getSystemService(NotificationManager.class);
         notifications.createNotificationChannel(new NotificationChannel("host", "Sharing status", NotificationManager.IMPORTANCE_LOW));
         var stop = PendingIntent.getService(this, 0, new Intent(this, HostService.class).setAction(STOP), PendingIntent.FLAG_IMMUTABLE);
-        var open = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
+        var open = PendingIntent.getActivity(this, 0, new Intent(this, PrismActivity.class), PendingIntent.FLAG_IMMUTABLE);
         startForeground(1, new Notification.Builder(this, "host")
             .setContentTitle("jNet is sharing").setSmallIcon(android.R.drawable.stat_sys_upload)
             .setOngoing(true).setOnlyAlertOnce(true).setContentText(diagnosticMode + " · SOCKS5 and setup page")
