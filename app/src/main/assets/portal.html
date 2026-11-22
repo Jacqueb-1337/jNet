@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#111b1e">
-  <title>Connect through jNet</title>
+  <title>jNet | Get connected</title>
   <style>
     :root{color-scheme:dark;--bg:#101719;--card:#192427;--field:#233236;--ink:#edf5f4;--muted:#aabcbf;--line:#344549;--accent:#7addc8}
     *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
@@ -41,82 +41,85 @@
 <main>
   <header>
     <div class="mark" aria-hidden="true">j</div>
-    <div><h1>Connect through jNet</h1><div class="muted">Internet sharing setup</div></div>
+    <div><h1>Get connected</h1><div class="muted">jNet setup</div></div>
   </header>
 
   <section class="card">
     <div class="eyebrow">Connection</div>
-    <div class="badge">Host ready</div>
+    <div class="badge">Ready</div>
     <div class="mono" id="endpoint">{{JNET_HOST}}:{{JNET_PORT}}</div>
-    <small>Stay connected to the host phone's Wi-Fi or Wi-Fi Direct network while setting up your client.</small>
+    <small>Stay on this Wi-Fi network until setup is complete.</small>
   </section>
 
   <section class="card">
     <div class="eyebrow">Step 1</div>
-    <h2>Install a proxy client</h2>
+    <h2 id="installTitle">Install FlClash</h2>
     <label for="platform">Your device</label>
     <select id="platform" aria-label="Platform">
       <option value="android">Android</option><option value="windows">Windows</option>
       <option value="linux">Linux</option><option value="macos">macOS</option><option value="ios">iPhone / iPad</option>
     </select>
     <div id="flclashPanel">
-      <p><strong>FlClash</strong> is recommended for this device. Its profile will include the jNet SOCKS5 connection, DNS and routing rules.</p>
-      <label for="package">Installer</label>
+      <div class="badge">Recommended</div>
+      <label for="package">Choose a version</label>
       <select id="package" aria-label="FlClash installer"></select>
       <div class="buttons">
         <a class="button primary" id="downloadApp" href="#">Download FlClash</a>
       </div>
-      <small>Downloads are streamed from the official FlClash release through your host phone. No separate internet access is needed on this device.</small>
     </div>
     <div id="iosPanel" hidden>
-      <p><strong>FlClash is not released for iOS.</strong> Use Potatso from the App Store, then add a SOCKS5 proxy using the endpoint above.</p>
-      <p class="muted">An App Store installation requires internet access. If Potatso is already installed, enter the host address and port shown above.</p>
+      <p>Use Potatso from the App Store to connect your iPhone or iPad.</p>
+      <small>Install it while you have internet access.</small>
     </div>
-    <details>
-      <summary>Other proxy clients (keep existing options)</summary>
+    <details id="otherClients">
+      <summary>Other apps</summary>
       <ul id="alternatives"></ul>
-      <small>These apps remain available. Their setup requires entering the SOCKS5 endpoint manually or importing a supported proxy QR.</small>
     </details>
   </section>
 
   <section class="card" id="importSection">
     <div class="eyebrow">Step 2</div>
-    <h2>Import the jNet connection</h2>
-    <p>Do not create any proxy groups or nodes by hand. This profile already contains them.</p>
+    <h2>Add jNet to FlClash</h2>
     <div id="authBox" hidden>
-      <div class="notice">Your host has enabled a SOCKS5 password. Enter the password provided by the host to create a private, 10-minute import link. Use this only on a trusted Wi-Fi network: the captive page uses HTTP.</div>
-      <label for="proxyPassword">jNet proxy password</label>
-      <input id="proxyPassword" type="password" autocomplete="off" placeholder="Password from your host">
+      <p>Enter the jNet password to continue.</p>
+      <label for="proxyPassword">Password</label>
+      <input id="proxyPassword" type="password" autocomplete="off" placeholder="jNet password">
+      <small>Only enter your password on a Wi-Fi network you trust.</small>
     </div>
     <div class="buttons">
       <button type="button" class="primary" id="importButton">Import into FlClash</button>
-      <button type="button" class="secondary" id="downloadYaml">Download YAML</button>
-      <button type="button" class="secondary" id="copyProfile">Copy profile URL</button>
+      <button type="button" class="secondary" id="downloadYaml">Download config</button>
+      <button type="button" class="secondary" id="copyProfile">Copy link</button>
     </div>
     <div id="status" role="status" aria-live="polite"></div>
-    <div id="copyFallback"><label for="profileUrl">Profile URL (select to copy)</label><input id="profileUrl" readonly></div>
-    <small>If the captive sign-in window blocks opening FlClash, open this page in your full browser. If the import button still fails, use Copy profile URL and import it from FlClash's Profiles screen.</small>
+    <div id="copyFallback"><label for="profileUrl">Setup link</label><input id="profileUrl" readonly></div>
+    <details><summary>Having trouble importing?</summary>
+      <p>Open this page in your browser, or copy the link and add it in FlClash under Profiles.</p>
+    </details>
   </section>
 
   <section class="card">
     <div class="eyebrow">Step 3</div>
-    <h2>Enable full-app networking</h2>
-    <ol class="numbered" id="instructions">
-      <li>In FlClash, apply the imported jNet profile. Leave routing mode on <strong>Rule</strong>, not Direct.</li>
-      <li>On Android, open <strong>Dashboard → Edit</strong>, add the <strong>VPN</strong> control if missing, then exit editing.</li>
-      <li>Turn on <strong>VPN</strong> and approve Android's VPN request. On desktop, enable <strong>TUN</strong> and authorize it when prompted.</li>
-      <li>Open a website and verify the host phone's jNet traffic counters increase.</li>
+    <h2>Turn on the connection</h2>
+    <ol class="numbered" id="androidInstructions">
+      <li>Open FlClash and select your jNet profile.</li>
+      <li>On Dashboard, tap <strong>Edit</strong> and add <strong>VPN</strong> if you don't see it.</li>
+      <li>Turn on <strong>VPN</strong> and tap Allow when Android asks.</li>
+      <li>Open a website to check that you're connected.</li>
+    </ol>
+    <ol class="numbered" id="desktopInstructions" hidden>
+      <li>Open FlClash and select your jNet profile.</li>
+      <li>Enable <strong>TUN</strong> and approve the permission prompt, if shown.</li>
+      <li>Open a website to check that you're connected.</li>
     </ol>
     <ol class="numbered" id="iosInstructions" hidden>
-      <li>Install and open Potatso. You need to install it from the App Store before going offline.</li>
-      <li>Add a SOCKS5 proxy using the jNet host IP address and port shown above. If enabled, enter username <strong>jnet</strong> and the password from your host.</li>
-      <li>Enable Potatso's VPN connection and approve the iOS VPN configuration request.</li>
-      <li>Open a website and check that the host phone's jNet traffic counters increase.</li>
+      <li>Open Potatso and add a <strong>SOCKS5</strong> proxy.</li>
+      <li>Enter the jNet address and port shown above. If you've set a password, use username <strong>jnet</strong>.</li>
+      <li>Turn on the VPN and approve the iOS prompt.</li>
+      <li>Open a website to check that you're connected.</li>
     </ol>
-    <p class="muted" id="platformHint">Android: you may need to add the VPN control to the dashboard once.</p>
-    <p class="notice">Importing a configuration does <strong>not</strong> grant VPN permission or start VPN/TUN automatically. You must enable it inside FlClash.</p>
   </section>
-  <footer>jNet • Setup page is served locally by your host phone</footer>
+  <footer>jNet</footer>
 </main>
 <script>
 (function () {
@@ -129,8 +132,8 @@
   var status = document.getElementById('status');
   var catalog = {
     android: [
-      ['flclash-android-arm64','Android ARM64 (most phones)'],
-      ['flclash-android-arm','Android 32-bit ARM'],
+      ['flclash-android-arm64','Android (most phones)'],
+      ['flclash-android-arm','Android (older 32-bit phones)'],
       ['flclash-android-x64','Android x86_64']
     ],
     windows: [
@@ -138,7 +141,7 @@
       ['flclash-windows-arm','Windows ARM64 setup']
     ],
     linux: [
-      ['flclash-linux','Linux x64 .deb (Mint/Ubuntu)'],
+      ['flclash-linux','Linux x64 (Mint/Ubuntu)'],
       ['flclash-linux-arm','Linux ARM64 .deb'],
       ['flclash-linux-appimage','Linux x64 AppImage'],
       ['flclash-linux-arm-appimage','Linux ARM64 AppImage']
@@ -170,7 +173,9 @@
     document.getElementById('flclashPanel').hidden = !supports;
     document.getElementById('iosPanel').hidden = supports;
     document.getElementById('importSection').hidden = !supports;
-    document.getElementById('instructions').hidden = !supports;
+    document.getElementById('installTitle').textContent = supports ? 'Install FlClash' : 'Install Potatso';
+    document.getElementById('androidInstructions').hidden = os !== 'android';
+    document.getElementById('desktopInstructions').hidden = os === 'android' || os === 'ios';
     document.getElementById('iosInstructions').hidden = supports;
     packageSelect.textContent = '';
     (catalog[os] || []).forEach(function (choice) {
@@ -185,15 +190,7 @@
       anchor.href = link(choice[0]); anchor.textContent = choice[1];
       item.appendChild(anchor); alternatives.appendChild(item);
     });
-    if (!alternatives.children.length) {
-      var item = document.createElement('li');
-      item.textContent = os === 'ios' ? 'Potatso (App Store)' : 'Use any compatible SOCKS5 client you already have.';
-      alternatives.appendChild(item);
-    }
-    document.getElementById('platformHint').textContent =
-      os === 'android' ? 'Android: tap Dashboard → Edit, add VPN if it is missing, then enable VPN.' :
-      os === 'ios' ? 'iOS: set up Potatso manually using the SOCKS5 address and port above.' :
-      'Desktop: enable TUN in FlClash after importing. An administrator prompt may appear.';
+    document.getElementById('otherClients').hidden = !(other[os] || []).length;
     status.textContent = '';
   }
   function updateDownload() {
@@ -218,16 +215,16 @@
   }
   async function withProfile(callback) {
     try {
-      message('Preparing your jNet configuration…', false);
+      message('Preparing connection…', false);
       var url = await profileUrl();
       if (url) await callback(url);
     } catch (_) {
-      message('Could not reach the jNet setup server. Check your Wi-Fi connection.', true);
+      message('Can’t reach jNet. Check your Wi-Fi connection.', true);
     }
   }
   document.getElementById('importButton').addEventListener('click', function () {
     withProfile(async function (url) {
-      message('Opening FlClash. Approve the import, then enable VPN/TUN inside the app.', false);
+      message('Opening FlClash…', false);
       window.location.href = 'clash://install-config?url=' + encodeURIComponent(url);
     });
   });
@@ -236,7 +233,7 @@
       var a = document.createElement('a');
       a.href = url; a.download = 'jnet-flclash.yaml';
       document.body.appendChild(a); a.click(); a.remove();
-      message('Configuration download requested. Import the file through FlClash Profiles.', false);
+      message('Configuration downloaded. Open the file in FlClash.', false);
     });
   });
   document.getElementById('copyProfile').addEventListener('click', function () {
@@ -251,8 +248,8 @@
         field.focus(); field.select();
         try { copied = document.execCommand('copy'); } catch (_) {}
       }
-      message(copied ? 'Profile URL copied. Paste it into FlClash Profiles → Import from URL.' :
-        'Select the profile URL above to copy it into FlClash.', false);
+      message(copied ? 'Link copied. Add it in FlClash under Profiles.' :
+        'Select and copy the setup link above.', false);
     });
   });
   document.getElementById('authBox').hidden = !auth;
