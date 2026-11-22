@@ -125,7 +125,7 @@ function updateModeButtons() {
     el.disabled=isRunning();
   }
 }
-function switchTab(tab) {
+function switchTab(tab, fromDock = false) {
   if(!['dashboard','sharing','activity','settings'].includes(tab) || (tab===screen && !sheetOpen)) return;
   if(sheetOpen) closeSheet();
   scrollPositions[screen] = $('pageScroller').scrollTop;
@@ -144,19 +144,16 @@ function switchTab(tab) {
   pageScroller.scrollTop=scrollPositions[screen] || 0;
   syncHeaderRefraction();
   if (!QA) safeNative('tab', screen);
-  setLens(navItems.findIndex(el=>el.dataset.tab===screen));
+  if(!fromDock) dock.moveTo(navItems.findIndex(el=>el.dataset.tab===screen));
 }
-const lensPosition=new Prism.SpringValue(0,{onUpdate:value=>{
-  navLens.style.transform='translate3d('+value.toFixed(2)+'px,0,0)';
-}});
-function setLens(i) {
-  const w=navItems[0]?.getBoundingClientRect().width||80;
-  if(reduced) lensPosition.jump(i*w);else lensPosition.set(i*w,Prism.springs.dockTravel);
-}
-window.addEventListener('resize',()=>{
-  lensPosition.jump((navItems[0]?.getBoundingClientRect().width||80)*Math.max(0,navItems.findIndex(el=>el.dataset.tab===screen)));
-});
-navItems.forEach(el=>el.addEventListener('click',()=>switchTab(el.dataset.tab)));
+// The Prism reference's seven-spring raw-pointer dock, adapted for jNet.
+ // A short tap preserves the old dockTravel spring and six-pixel resting
+ // geometry. A >=9px drag engages the exact demo lift/jelly/glow/fling model.
+const dock = new PrismDockSelector(
+  $('navDock'), navItems, navLens,
+  index => switchTab(navItems[index].dataset.tab, true),
+  reduced
+);
 function selectMode(mode) {
   if(isRunning()) {toast('Stop sharing to change modes.');return;}
   if(mode!=='wifi'&&mode!=='lan')return;
@@ -304,8 +301,7 @@ window.jNet={
 for(const el of document.querySelectorAll('.bouncy'))
   if(window.Prism&&Prism.elasticPress)Prism.elasticPress(el,{maxGrowth:7,pullPastEdges:true,hover:false});
 setInterval(()=>{if(state.active)$('sessionTime').textContent=timeText()},1000);
-requestAnimationFrame(()=>lensPosition.jump(0));
+requestAnimationFrame(()=>dock.paint());
 syncHeaderRefraction();
 renderState();
 })();
-

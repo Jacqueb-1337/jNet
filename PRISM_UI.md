@@ -114,3 +114,48 @@ fade opacity interpolates, long Activity content passes under the fixed
 header, settings button remains clickable, and no JS exceptions. Screenshots
 reviewed. Final Android device appearance still requires acceptance testing.
 
+
+## Dock direct-manipulation gestures and Android text selection (v0.1.33)
+
+The dock used to rely only on four button click handlers and a single
+pixel-offset spring. Android WebView could instead open its native Copy /
+Select all / Share text-selection overlay when a tab was held or dragged.
+
+The dock is now a non-selectable gesture surface. CSS applies
+touch-action:none, user-select:none, -webkit-user-select:none,
+-webkit-touch-callout:none and a transparent tap highlight to the dock and
+all descendants. The pointer handler also prevents the default pointerdown
+action, clears a previous selection, and suppresses contextmenu/selectstart/
+dragstart events. This is deliberately scoped to the dock: editable fields
+and diagnostic text elsewhere retain their normal selection behavior.
+
+prism-dock.js ports the actual FlClash Prism v3 Dock gesture implementation
+from the local prototype (itself based on prism_ui/navigation_dock.dart):
+- Seven independent velocity-aware analytic springs for position, lift,
+  jelly/wobble, swell, edge stretch, glow and glow spread.
+- Raw pointer capture with 9px drag threshold; the lens tracks pointer
+  position through dockFollow while swell/lift/edge stretch follow their
+  corresponding demo spring descriptions.
+- Live velocity in px/s is projected by (velocity/pitch)*0.1 dock positions
+  on release, then snapped at most one adjacent item past the last crossed
+  item (the reference's exact clamp), with overscroll rubber banding.
+- The animation remains interruptible; release waits for the lifted lens to
+  reach full extension and position settle before returning to its base.
+- Touch cancellation restores the active tab; keyboard arrows and
+  accessibility-generated button clicks continue to navigate.
+- The dock backdrop and moving lens remain independent SVG-refractive
+  surfaces. The previously corrected sRGB displacement map is unchanged.
+
+TAP PRESERVATION: a pointer that never moves 9px uses jNet's original
+dockTravel spring (the same physical spring description as v0.1.32) and
+original lens resting width/height and six-pixel inset. The full FlClash
+lifted shape and motion parameters are engaged only for a real drag.
+During lift descent, the lens interpolates continuously back to jNet's
+resting geometry instead of snapping widths at the end.
+
+Browser and Android-UA QA: hold a tab for 800–950 ms, tap, drag across
+tabs, drag with velocity, pointer cancel, tap again, and keyboard arrows;
+tested 392, 350, and 540px viewport widths. No selected text, tab/scroll
+regressions, JS errors or broken SVG refraction in browser tests. Android
+system bars and the scroll-reactive header are unchanged. On-device
+WebView acceptance testing still needed after installing.

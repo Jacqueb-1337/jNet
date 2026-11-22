@@ -138,3 +138,57 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
   border-color:rgba(227,238,255,.30);
   box-shadow:inset 0 2px 5px rgba(255,255,255,.18),0 4px 10px #0005;
 }
+
+/* Dock is a gesture surface, not selectable text. Android WebView otherwise
+   raises text-selection handles and Copy/Select all/Share on a long press. */
+#navDock,#navDock *{
+  -webkit-user-select:none!important;
+  user-select:none!important;
+  -webkit-touch-callout:none!important;
+  -webkit-tap-highlight-color:transparent;
+}
+#navDock{
+  touch-action:none;
+  transform:scale(var(--dock-scale,1));
+  transform-origin:50% 50%;
+  overflow:visible;
+  isolation:isolate;
+  cursor:grab;
+}
+#navDock.is-dragging{cursor:grabbing}
+#dockGlassBase::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  z-index:1;
+  pointer-events:none;
+  background:radial-gradient(circle var(--glow-radius,28px) at var(--glow-x,50%) 50%,rgba(255,255,255,var(--glow-alpha,0)),transparent 100%);
+}
+#dockLens{
+  will-change:left,top,width,height;
+  border-radius:100px;
+  box-shadow:0 4px 10px rgba(0,0,0,.34),inset 0 2px 4px rgba(255,255,255,.12);
+}
+#dockLens::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  opacity:var(--lens-lift,0);
+  pointer-events:none;
+  border:1px solid rgba(255,255,255,.27);
+  box-shadow:inset 0 2px 5px rgba(255,255,255,.19),0 6px 20px rgba(0,0,0,.26);
+}
+.dock-item{touch-action:none;overflow:visible}
+.dock-item .icon{
+  transform:scale(calc(1 + .16 * var(--lift-proximity,0)));
+  will-change:transform;
+}
+.dock-item:not(.active){
+  color:color-mix(in srgb,#83bcff var(--selected-proximity-pct,0%),#dfdfe8);
+}
+@media(prefers-reduced-motion:reduce){
+  #navDock{transform:none}
+  #dockLens,.dock-item .icon{will-change:auto}
+}
