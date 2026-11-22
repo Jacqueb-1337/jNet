@@ -4,7 +4,19 @@ Android host for a SOCKS5 proxy over current Wi-Fi or Wi-Fi Direct. Requires And
 
 ## Set up an offline device
 
-Start sharing, join the shared Wi-Fi, then scan **Setup page QR** with the other device's camera or type the displayed setup URL into its browser. Use the complete URL including the port. The phone streams official Windows, Android and Linux client downloads over its internet connection. The local page also shows the SOCKS5 settings. An automatic sign-in popup depends on the client and network. Use **Proxy QR** to import settings into an installed client.
+Start sharing, join the shared Wi-Fi, then scan **Setup page QR** with the other device's camera or type the displayed setup URL into its browser. Use the complete URL including the port. The phone streams official client downloads over its internet connection, including FlClash for Android, Windows, Linux and macOS. Existing v2rayN (Windows/Linux), NekoBox (Android) and Potatso (iOS) choices are retained. An automatic sign-in popup depends on the client and network. Use **Proxy QR** to import SOCKS5 settings into compatible clients.
+
+### Recommended FlClash setup (Android, Windows, Linux, macOS)
+
+1. On jNet's local setup page, select your platform and download FlClash. FlClash is the default choice for those platforms. FlClash is **not available on iOS**; use Potatso there instead.
+2. Tap **Import into FlClash**. The page hosts a complete Mihomo YAML profile with jNet's actual SOCKS5 host, port, UDP relay, DNS, a jNet proxy group, direct LAN rules and an internet catch-all rule. You can also **Download YAML** or **Copy profile URL** to import through FlClash's Profiles screen. Captive sign-in minibrowsers may block opening apps; use a full browser if needed.
+3. If jNet has a SOCKS5 password, enter it in the setup page first. The portal checks the supplied password and returns an unguessable **10-minute import URL**. The password is never published in the general setup page or public profile URL. Use this HTTP setup page on a trusted local network, since the token and password travel over local HTTP. A token will expire and the configuration must be reimported when the jNet host address changes.
+4. Apply the imported profile and use **Rule** routing. On Android, open **Dashboard → Edit**, add the **VPN** button if it is missing, then enable VPN and approve Android's VPN permission. On desktop, enable **TUN** and authorize elevation if prompted. A YAML import cannot turn on FlClash's VPN button or grant operating system permissions.
+5. Open a website and verify jNet's traffic counters increase. If traffic bypasses jNet, confirm the profile is selected, routing is **Rule** rather than Direct, VPN/TUN is on, and the phone's IP is still reachable outside the tunnel.
+
+When no proxy password is configured, the generated profile is available at `http://PHONE_IP:PORT/flclash.yaml`, where PORT is the **setup portal** port printed by jNet, not SOCKS5 port 1080. The profile contains the live SOCKS5 endpoint, so it should not be copied from a different hosting session.
+
+
 
 ## Connect a computer
 
