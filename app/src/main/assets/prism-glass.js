@@ -6,17 +6,12 @@
  * The optical map follows the source's rounded-box signed distance, circular bevel,
  * negative lens refraction, saturation, translucency and optional RGB splitting.
  * Chrome's SVG backdrop sampling is not equivalent to Impeller's LiquidGlassHost atlases.
- * Android WebView deliberately uses blur/saturation with gloss instead of nested SVG
- * displacement, which otherwise misaligns live sampled content and clips the lens.
+ * Dock layers are sibling surfaces so backdrop displacement sees original
+ * page content without a nested filter root shifting the sampled region.
  */
 (function(){
 'use strict';
 const NS='http://www.w3.org/2000/svg';
-// Android WebView misregisters nested SVG displacement filters when the dock
-// is composited over a scrolling WebView. Use the live CSS backdrop there.
-// This prevents undefined/transparent bands and sampled pixels from
-// appearing at the wrong screen coordinates.
-const stableAndroidGlass = /Android/i.test(navigator.userAgent);
 const create=(tag,attrs={})=>{const el=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,String(v)));return el};
 const styles={
   pill:{refraction:60,bevel:20,blur:0,haze:.72,hazeBlur:15.6,saturation:1.925,brightness:1,tint:[74,75,81,.48]},
@@ -27,6 +22,21 @@ const styles={
 };
 const mix=(a,b,t)=>a+(b-a)*t;
 const smooth=(a,b,x)=>{let t=Math.max(0,Math.min(1,(x-a)/(b-a||1)));return t*t*(3-2*t)};
+// Chromium's feDisplacementMap reads feImage's decoded LINEAR channel values,
+// not the 0..255 sRGB byte value. A neutral displacement therefore requires
+// sRGB(0.5) ~= 188, not 128. Using 128 caused a ~42px false displacement.
+// Generate the transfer function once. Avoid hundreds of thousands of
+// Math.pow() calls when rebuilding optical maps on a phone.
+const displacementLut=new Uint8Array(4097);
+for(let i=0;i<=4096;i++){
+  const linear=i/4096;
+  const encoded=linear<=0.0031308?12.92*linear:1.055*Math.pow(linear,1/2.4)-0.055;
+  displacementLut[i]=Math.round(encoded*255);
+}
+function displacementByte(delta,scale){
+  const linear=Math.max(0,Math.min(1,0.5+delta/scale));
+  return displacementLut[Math.round(linear*4096)];
+}
 function shape(x,y,w,h,r){
   const hx=w/2,hy=h/2,qx=Math.abs(x)-hx+r,qy=Math.abs(y)-hy+r;
   const d=Math.hypot(Math.max(0,qx),Math.max(0,qy))+Math.min(Math.max(qx,qy),0)-r;
@@ -49,8 +59,8 @@ function mapImage(w,h,material,channel){
     else{const amount=Math.min(m.refraction,minor)*(1-Math.sqrt(Math.max(0,1-rise*rise)));dx=-nx*amount;dy=-ny*amount}
     if(channel&&inset<10){const split=(m.dispersion||0)*.5*(.6+.4*Math.abs(ny)*Math.max(1-inset/7,0))*(1-smooth(7,10,inset));dx+=(channel==='red'?1:-1)*ny*split;dy+=(channel==='red'?1:-1)*nx*split;}
     const k=(iy*pw+ix)*4;
-    data[k]=Math.max(0,Math.min(255,Math.round(127.5+dx*255/scale)));
-    data[k+1]=Math.max(0,Math.min(255,Math.round(127.5+dy*255/scale)));
+    data[k]=displacementByte(dx,scale);
+    data[k+1]=displacementByte(dy,scale);
     data[k+2]=127;data[k+3]=255;
   }
   cx.putImageData(img,0,0);return {url:c.toDataURL('image/png'),scale};
@@ -64,34 +74,41 @@ class GlassHost{
     this.observer=new ResizeObserver(entries=>{for(const entry of entries){const n=this.nodes.get(entry.target);if(n)this.schedule(n)}});
     addEventListener('resize',()=>{this.nodes.forEach(n=>this.schedule(n))});
   }
-  bind(element,type){if(!element||this.nodes.has(element))return;const id='prism-glass-'+(++this.seq),filter=create('filter',{id,x:'-15%',y:'-35%',width:'130%',height:'170%',filterUnits:'objectBoundingBox',primitiveUnits:'userSpaceOnUse',colorInterpolationFilters:'sRGB'});this.defs.append(filter);
+  bind(element,type){if(!element||this.nodes.has(element))return;const id='prism-glass-'+(++this.seq),filter=create('filter',{id,x:0,y:0,width:1,height:1,filterUnits:'userSpaceOnUse',primitiveUnits:'userSpaceOnUse',colorInterpolationFilters:'sRGB'});this.defs.append(filter);
     const node={element,type,id,filter,queued:0,lastW:0,lastH:0};this.nodes.set(element,node);element.classList.add('prism-optical');element.dataset.opticalType=type;this.observer.observe(element);this.schedule(node);return node;
   }
-  schedule(n){clearTimeout(n.queued);n.queued=setTimeout(()=>this.update(n),n.type==='lens'?90:110)}
+  schedule(n){
+    if(n.queued)return;
+    n.queued=requestAnimationFrame(()=>{
+      n.queued=0;
+      this.update(n);
+    });
+  }
   update(n){if(!n.element.isConnected)return;const r=n.element.getBoundingClientRect(),w=Math.max(1,r.width),h=Math.max(1,r.height);if(w<3||h<3)return;
     if(Math.abs(w-n.lastW)<1&&Math.abs(h-n.lastH)<1)return;
     n.lastW=w;n.lastH=h;
     const m=styles[n.type];if(!m)return;
-    if(stableAndroidGlass){
-      const filter=n.type==='lens'
-        ? 'blur(7px) saturate(1.35) brightness(1.08)'
-        : n.type==='pill'
-          ? 'blur(20px) saturate(1.65) brightness(1.05)'
-          : n.type==='menu'
-            ? 'blur(22px) saturate(1.42) brightness(1.02)'
-            : 'blur(15px) saturate(1.5) brightness(1.04)';
-      n.element.style.backdropFilter=filter;
-      n.element.style.webkitBackdropFilter=filter;
-      n.element.dataset.glassMode='stable';
-      n.element.style.setProperty('--optical-tint',
-        'rgba('+m.tint[0]+','+m.tint[1]+','+m.tint[2]+','+m.tint[3]+')');
-      return;
-    }
+    // Displacement can reach outside the element near rounded edges. Expand the
+    // filter capture region in the SAME local coordinate space as feImage.
+    const gutter=Math.ceil(Math.max(35,Math.min(100,Math.abs(m.refraction)+m.blur*3)));
+    n.filter.setAttribute('x',String(-gutter));
+    n.filter.setAttribute('y',String(-gutter));
+    n.filter.setAttribute('width',String(w+2*gutter));
+    n.filter.setAttribute('height',String(h+2*gutter));
+    n.element.dataset.glassMode='refractive';
     const image=mapImage(w,h,n.type),f=n.filter;f.replaceChildren();
     let source='SourceGraphic';
     if(m.blur>0){f.append(create('feGaussianBlur',{in:source,stdDeviation:m.blur,result:'frost'}));source='frost'}
     if(m.haze>0){f.append(create('feGaussianBlur',{in:'SourceGraphic',stdDeviation:m.hazeBlur,result:'haze'}));f.append(create('feComposite',{in:source,in2:'haze',operator:'arithmetic',k1:0,k2:1-m.haze,k3:m.haze,k4:0,result:'mixFrost'}));source='mixFrost'}
-    const addDrop=(name,img)=>{f.append(create('feImage',{href:img.url,x:0,y:0,width:w,height:h,preserveAspectRatio:'none',result:name+'Map'}));f.append(create('feDisplacementMap',{in:source,in2:name+'Map',scale:img.scale,xChannelSelector:'R',yChannelSelector:'G',result:name+'Drop'}));};
+    const addDrop=(name,img)=>{
+      // An feImage only covers the element rect; outside it Chromium reads 0,
+      // which turns into an enormous false displacement at rounded edges.
+      // Extend with a true linear-neutral map before compositing the texture.
+      f.append(create('feFlood',{'flood-color':'#bcbcbc',result:name+'Neutral'}));
+      f.append(create('feImage',{href:img.url,x:0,y:0,width:w,height:h,preserveAspectRatio:'none',result:name+'Map'}));
+      f.append(create('feComposite',{in:name+'Map',in2:name+'Neutral',operator:'over',result:name+'SafeMap'}));
+      f.append(create('feDisplacementMap',{in:source,in2:name+'SafeMap',scale:img.scale,xChannelSelector:'R',yChannelSelector:'G',result:name+'Drop'}));
+    };
     addDrop('base',image);
     if(m.dispersion&&document.body.dataset.glass==='ultra'){
       addDrop('red',mapImage(w,h,n.type,'red'));addDrop('blue',mapImage(w,h,n.type,'blue'));
@@ -109,10 +126,10 @@ class GlassHost{
     n.element.style.setProperty('--optical-tint',`rgba(${m.tint[0]},${m.tint[1]},${m.tint[2]},${m.tint[3]})`);
   }
   quality(mode){this.enabled=mode!=='none';if(!this.enabled){this.nodes.forEach(n=>{n.element.style.removeProperty('backdrop-filter');n.element.style.removeProperty('-webkit-backdrop-filter')});return}for(const n of this.nodes.values()){n.lastW=0;this.update(n)}}
-  destroy(){this.observer.disconnect();this.nodes.forEach(n=>{clearTimeout(n.queued);n.filter.remove()});this.nodes.clear();this.root.remove()}
+  destroy(){this.observer.disconnect();this.nodes.forEach(n=>{cancelAnimationFrame(n.queued);n.filter.remove()});this.nodes.clear();this.root.remove()}
 }
 let glassHost;
-function enable(){if(glassHost)return glassHost;glassHost=new GlassHost();const reg=(sel,type)=>document.querySelectorAll(sel).forEach(el=>glassHost.bind(el,type));reg('#navDock','pill');reg('#dockLens','lens');reg('.circle-action','regular');reg('.prism-popup-platter','menu');reg('#popupMenu','menu');reg('#sheetPanel','menu');reg('.status-deck .deck-card','menu');const n=document.querySelector('.status-deck');if(!n){new MutationObserver(()=>{reg('.status-deck .deck-card','menu')}).observe(document.body,{childList:true,subtree:false})}
+function enable(){if(glassHost)return glassHost;glassHost=new GlassHost();const reg=(sel,type)=>document.querySelectorAll(sel).forEach(el=>glassHost.bind(el,type));reg('#dockGlassBase','pill');reg('#dockLens','lens');reg('.circle-action','regular');reg('.prism-popup-platter','menu');reg('#popupMenu','menu');reg('#sheetPanel','menu');reg('.status-deck .deck-card','menu');const n=document.querySelector('.status-deck');if(!n){new MutationObserver(()=>{reg('.status-deck .deck-card','menu')}).observe(document.body,{childList:true,subtree:false})}
  return glassHost;}
 window.PrismGlass={init:enable,get host(){return glassHost},styles,shape,mapImage};
 // Wait until DOM and the app are initialized, so source elements already exist.

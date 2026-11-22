@@ -135,6 +135,12 @@ public final class MainActivity extends Activity {
         proxyPassword.setHint("Proxy password (optional)");
         proxyPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
             android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        try {
+            proxyPassword.setText(ProxySecretStore.read(this));
+        } catch (Exception error) {
+            android.util.Log.e("jNet", "Could not restore saved proxy password", error);
+            Toast.makeText(this, "Could not restore the saved proxy password.", Toast.LENGTH_LONG).show();
+        }
         add(settingsPanel, proxyPassword, 0);
         add(settingsPanel, label("SOCKS5 username: jnet", 14, MUTED), 4);
         section(content, "Sharing");
@@ -154,6 +160,9 @@ public final class MainActivity extends Activity {
         mobileOnly.setText("Use mobile data for Current Wi-Fi");
         mobileOnly.setTextColor(INK);
         mobileOnly.setMinHeight(dp(48));
+        mobileOnly.setChecked(getPreferences(MODE_PRIVATE).getBoolean("mobileOnly", false));
+        mobileOnly.setOnCheckedChangeListener((button, checked) ->
+                getPreferences(MODE_PRIVATE).edit().putBoolean("mobileOnly", checked).apply());
         add(currentWifiOptions, mobileOnly, 0);
         add(currentWifiOptions,
             label("Off: phone’s default internet (usually Wi-Fi). On: mobile data only.", 13, MUTED), 2);
@@ -176,6 +185,16 @@ public final class MainActivity extends Activity {
             proxyPassword.setError("Maximum 255 UTF-8 bytes");
             return;
         }
+        try {
+            ProxySecretStore.write(this, password);
+        } catch (Exception error) {
+            android.util.Log.e("jNet", "Couldn't save SOCKS5 password", error);
+            Toast.makeText(this, "Could not save proxy password.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        getPreferences(MODE_PRIVATE).edit()
+                .putString("selectedMode", action)
+                .putBoolean("mobileOnly", mobileOnly.isChecked()).apply();
         int band = getPreferences(MODE_PRIVATE).getInt("wifiBand", 0);
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
                 !getPreferences(MODE_PRIVATE).getBoolean("askedForNotifications", false)) {
@@ -510,6 +529,15 @@ public final class MainActivity extends Activity {
         if (updater != null) updater.onResume();
     }
     @Override protected void onPause() {
+        if (proxyPassword != null && proxyPassword.getText().toString()
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 255) {
+            try {
+                ProxySecretStore.write(this, proxyPassword.getText().toString());
+            } catch (Exception error) {
+                android.util.Log.e("jNet", "Couldn't save proxy password", error);
+                Toast.makeText(this, "Could not save proxy password.", Toast.LENGTH_LONG).show();
+            }
+        }
         if (updater != null) updater.onPause();
         super.onPause();
     }

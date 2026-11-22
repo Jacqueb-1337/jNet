@@ -5,7 +5,10 @@ const $ = id => document.getElementById(id);
 const QA = typeof window.Native === 'undefined';
 const native = window.Native || {};
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-let screen = 'dashboard', selectedMode = 'lan', pendingStart = false, sheetOpen = false, sheetExpanded = false;
+const cachedMode = (()=>{try {return localStorage.getItem('jnet_mode')}catch(_){return null}})();
+let screen = 'dashboard', selectedMode = cachedMode==='wifi'?'wifi':'lan', pendingStart = false, sheetOpen = false, sheetExpanded = false;
+let initialConfigApplied = false;
+const scrollPositions = {dashboard:0,sharing:0,activity:0,settings:0};
 let state = {active:false,status:'Idle',mode:'None',details:'',upstream:'',endpoint:'',portalUrl:'',sent:0,received:0,sentRate:0,receivedRate:0,connections:0,accepted:0,devices:0,log:'',lastUdp:0,startedAt:0};
 let config = {mobileOnly:false,proxyPassword:'',wifiPassword:'',wifiBand:0,units:'MB/s',version:''};
 const uploadSamples = Array(48).fill(0), downloadSamples = Array(48).fill(0);
@@ -71,7 +74,9 @@ function renderState() {
   $('statusBadgeText').textContent=running?'Connected':connecting?'Connecting':'Offline';
   $('sharingBadge').textContent=running?'Connected':connecting?'Connecting':'Offline';
   $('sharingBadge').className='pill'+(running?' green':connecting?' warn':'');
-  if(isRunning()) selectedMode=state.mode==='Wi-Fi Direct'?'wifi':'lan';
+  // Status updates must never overwrite a user selection while not sharing.
+  if(isRunning() && state.mode==='Wi-Fi Direct') selectedMode='wifi';
+  else if(isRunning() && state.mode==='Current Wi-Fi') selectedMode='lan';
   updateModeButtons();
   $('modeName').textContent=selectedMode==='lan'?'Current Wi-Fi':'Wi-Fi Direct';
   icon('modeIcon',selectedMode==='lan'?'wifi':'router');
@@ -106,6 +111,7 @@ function updateModeButtons() {
 function switchTab(tab) {
   if(!['dashboard','sharing','activity','settings'].includes(tab) || (tab===screen && !sheetOpen)) return;
   if(sheetOpen) closeSheet();
+  scrollPositions[screen] = $('pageScroller').scrollTop;
   document.querySelector('#page-'+screen)?.classList.remove('active');
   screen=tab;
   const page=$('page-'+screen);page.classList.add('active');
@@ -118,7 +124,8 @@ function switchTab(tab) {
   } else {page.style.opacity='';page.style.transform=''}
   navItems.forEach(el=>{const active=el.dataset.tab===screen;el.classList.toggle('active',active);active?el.setAttribute('aria-current','page'):el.removeAttribute('aria-current')});
   $('headerTitle').textContent=screen==='dashboard'?'jNet':screen.charAt(0).toUpperCase()+screen.slice(1);
-  $('pageScroller').scrollTop=0;
+  $('pageScroller').scrollTop=scrollPositions[screen] || 0;
+  if (!QA) safeNative('tab', screen);
   setLens(navItems.findIndex(el=>el.dataset.tab===screen));
 }
 const lensPosition=new Prism.SpringValue(0,{onUpdate:value=>{
@@ -135,7 +142,10 @@ navItems.forEach(el=>el.addEventListener('click',()=>switchTab(el.dataset.tab)))
 function selectMode(mode) {
   if(isRunning()) {toast('Stop sharing to change modes.');return;}
   if(mode!=='wifi'&&mode!=='lan')return;
-  selectedMode=mode;updateModeButtons();renderState();
+  selectedMode=mode;
+  try {localStorage.setItem('jnet_mode',mode)} catch(_) {}
+  if (!QA) safeNative('mode', mode);
+  updateModeButtons();renderState();
 }
 document.querySelectorAll('[data-mode]').forEach(el=>el.addEventListener('click',()=>selectMode(el.dataset.mode)));
 $('mainAction').addEventListener('click',()=>{
@@ -247,7 +257,21 @@ function receive(data){
 }
 function configReceived(data) {
   if(!data||typeof data!=='object')return;
-  config={...config,...data};renderState();
+  config={...config,...data};
+  if(!initialConfigApplied) {
+    initialConfigApplied=true;
+    if(data.selectedMode==='wifi'||data.selectedMode==='lan') {
+      selectedMode=data.selectedMode;
+      try {localStorage.setItem('jnet_mode',selectedMode)} catch(_) {}
+    }
+    const tab=data.selectedTab;
+    if(['dashboard','sharing','activity','settings'].includes(tab)&&tab!==screen)
+      switchTab(tab);
+  } else if (!isRunning() && (data.selectedMode==='wifi'||data.selectedMode==='lan')) {
+    selectedMode=data.selectedMode;
+    try {localStorage.setItem('jnet_mode',selectedMode)} catch(_) {}
+  }
+  renderState();
 }
 window.jNet={
   receive,config:configReceived,

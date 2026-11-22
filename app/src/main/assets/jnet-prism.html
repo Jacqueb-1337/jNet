@@ -158,7 +158,10 @@
   </main>
 
   <nav id="navDock" aria-label="Main navigation">
-    <div id="dockLens"></div>
+    <!-- Separate sibling backdrops prevent the moving lens from sampling a
+         transformed ancestor's already-blurred backdrop. -->
+    <div id="dockGlassBase" aria-hidden="true"></div>
+    <div id="dockLens" aria-hidden="true"></div>
     <button class="dock-item active" data-tab="dashboard" aria-current="page"><span class="icon"><svg><use href="#i-home"/></svg></span><span>Dashboard</span></button>
     <button class="dock-item" data-tab="sharing"><span class="icon"><svg><use href="#i-sharing"/></svg></span><span>Sharing</span></button>
     <button class="dock-item" data-tab="activity"><span class="icon"><svg><use href="#i-activity"/></svg></span><span>Activity</span></button>
