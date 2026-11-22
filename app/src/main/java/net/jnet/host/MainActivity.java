@@ -115,20 +115,16 @@ public final class MainActivity extends Activity {
         add(connection, stop, 4);
         stop.setOnClickListener(view -> stopService(new Intent(this, HostService.class)));
         settingsPanel = panel();
-        var clientHelp = button("Recommended proxy clients");
+        var clientHelp = button("Help connecting another device");
         add(settingsPanel, clientHelp, 12);
         clientHelp.setOnClickListener(view -> new android.app.AlertDialog.Builder(this)
             .setTitle("Connect another device")
-            .setMessage("Recommended: FlClash on Android, Windows, Linux and macOS.\n"
-                + "Join the shared Wi-Fi, open the Setup page QR, select your platform, and tap Import into FlClash.\n\n"
-                + "Android: Dashboard > Edit > add VPN (if missing), then turn on VPN and approve permission.\n"
-                + "Windows, Linux and macOS: enable TUN and approve administrator access if requested.\n"
-                + "Use Rule routing. VPN/TUN must be enabled in FlClash after importing.\n\n"
-                + "Existing alternatives are still available from the setup page:\n"
-                + "Android: NekoBox\nWindows/Linux: v2rayN\nLinux: ProxyChains-NG (per-app proxy)\n"
-                + "iPhone/iPad: Potatso (FlClash is not available for iOS).\n\n"
-                + "Current Wi-Fi and Wi-Fi Direct support SOCKS5 TCP and UDP. "
-                + "Check jNet's traffic counters after connecting.")
+            .setMessage("1. Join the jNet Wi-Fi network on the other device.\n"
+                + "2. Scan Setup page QR to open the setup page.\n"
+                + "3. Install FlClash and tap Import into FlClash.\n"
+                + "4. In FlClash, enable VPN on Android or TUN on a computer.\n\n"
+                + "On Android, tap Dashboard > Edit and add VPN if it's missing.\n\n"
+                + "On iPhone or iPad, use Potatso.")
             .setPositiveButton("Done", null)
             .show());
         proxyPassword = new EditText(this);
