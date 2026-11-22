@@ -124,7 +124,7 @@ public final class MainActivity extends Activity {
                 + "3. Install FlClash and tap Import into FlClash.\n"
                 + "4. In FlClash, enable VPN on Android or TUN on a computer.\n\n"
                 + "On Android, tap Dashboard > Edit and add VPN if it's missing.\n\n"
-                + "On iPhone or iPad, use Potatso instead. Other apps are listed on the setup page.")
+                + "On iPhone or iPad, use Potatso.")
             .setPositiveButton("Done", null)
             .show());
         proxyPassword = new EditText(this);
