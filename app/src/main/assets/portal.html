@@ -88,18 +88,21 @@
     </div>
     <div class="buttons">
       <button type="button" class="primary" id="importButton">Import into FlClash</button>
-      <button type="button" class="secondary" id="downloadYaml">Download config</button>
-      <button type="button" class="secondary" id="copyProfile">Copy link</button>
     </div>
     <div id="status" role="status" aria-live="polite"></div>
-    <div id="copyFallback"><label for="profileUrl">Setup link</label><input id="profileUrl" readonly></div>
-    <details><summary>Having trouble importing?</summary>
-      <p>Open this page in your browser, or copy the link and add it in FlClash under Profiles.</p>
+    <details>
+      <summary>Other import options</summary>
+      <p>If FlClash doesn't open, try one of these options.</p>
+      <div class="buttons">
+        <button type="button" class="secondary" id="downloadYaml">Download config</button>
+        <button type="button" class="secondary" id="copyProfile">Copy link</button>
+      </div>
+      <div id="copyFallback"><label for="profileUrl">Setup link</label><input id="profileUrl" readonly></div>
     </details>
   </section>
 
   <section class="card">
-    <div class="eyebrow">Step 3</div>
+    <div class="eyebrow" id="connectStep">Step 3</div>
     <h2>Turn on the connection</h2>
     <ol class="numbered" id="androidInstructions">
       <li>Open FlClash and select your jNet profile.</li>
@@ -174,6 +177,7 @@
     document.getElementById('iosPanel').hidden = supports;
     document.getElementById('importSection').hidden = !supports;
     document.getElementById('installTitle').textContent = supports ? 'Install FlClash' : 'Install Potatso';
+    document.getElementById('connectStep').textContent = supports ? 'Step 3' : 'Step 2';
     document.getElementById('androidInstructions').hidden = os !== 'android';
     document.getElementById('desktopInstructions').hidden = os === 'android' || os === 'ios';
     document.getElementById('iosInstructions').hidden = supports;
